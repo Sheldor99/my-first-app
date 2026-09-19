@@ -1,6 +1,6 @@
 # PROJ-1: Supabase Infrastructure Setup
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-09-19
 **Last Updated:** 2026-09-19
 
@@ -215,6 +215,37 @@ Gespeichert in: Supabase (PostgreSQL), abgesichert durch Row Level Security (RLS
 - **Security:** Autorisierung/RLS-Isolation zwischen Teams ist robust und wurde mit echten simulierten Multi-User-Szenarien verifiziert; die zwei gefundenen Bugs betreffen Fehlerverhalten/Robustheit, nicht Daten-Leaks zwischen Teams
 - **Production Ready:** NO
 - **Recommendation:** BUG-1 zuerst fixen (blockiert den kompletten Team-Erstellungs-Flow für PROJ-3), danach BUG-2. Nach Fix: `/qa` erneut ausführen, um beide Fixes zu verifizieren.
+
+---
+
+## QA Re-Test (nach Bugfixes)
+
+**Tested:** 2026-09-19
+**Environment:** Dieselbe Live-Supabase-Umgebung, erneut mit drei frischen, klar markierten Testnutzern (`qa2-owner-a`, `qa2-member-b`, `qa2-outsider-c`), nach dem Test vollständig gelöscht (0 verbleibende `qa*`-Nutzer, 0 Zeilen in allen vier Tabellen danach).
+**Tester:** QA Engineer (AI)
+
+### BUG-1 Re-Test — RESOLVED
+- [x] `INSERT INTO teams (...) RETURNING *` als Ersteller liefert jetzt die neue Zeile zurück (kein RLS-Fehler mehr), verifiziert mit frischem Testnutzer
+- [x] Owner-Trigger weiterhin korrekt (Ersteller landet automatisch als `owner` in `team_members`)
+- [x] `INSERT INTO projects (...) RETURNING *` durch ein Team-Mitglied funktioniert ebenfalls weiterhin fehlerfrei (keine Nebenwirkung durch die Policy-Änderung)
+- [x] Regression: Outsider sieht das Team weiterhin nicht (Policy-Erweiterung `created_by = auth.uid()` führt zu keinem Datenleck an Dritte)
+
+### BUG-2 Re-Test — RESOLVED
+- [x] `GET /rest/v1/teams` mit `anon`-Key: `200 OK`, `[]` (vorher `401` + roher Postgres-Fehler)
+- [x] `GET /rest/v1/projects` und `/rest/v1/tasks` mit `anon`-Key: ebenfalls `200 OK`, `[]`
+- [x] `POST /rest/v1/rpc/is_team_member` mit `anon`-Key: `200 OK`, `false` (vorher Fehler)
+- [x] Security-Advisor zeigt nur noch die erwartete, bewusst akzeptierte WARN (anon kann Boolean-Hilfsfunktion aufrufen) — kein neues Finding
+
+### Regressions- und Vollständigkeitscheck (komplettes Szenario erneut durchgespielt)
+- [x] AC-3 (Cross-Team-Isolation): Outsider sieht weder Team noch Projekt, kann keine Rolle vortäuschen
+- [x] AC-4 (Cascade Delete): Team-Löschung entfernt `team_members` und `projects` vollständig (0 verbleibend)
+- [x] AC-5 (Owner-exklusive Aktionen): Member kann Owner nicht entfernen (0 betroffene Zeilen); Owner-Aktionen weiterhin uneingeschränkt möglich
+- [x] AC-6 (FK-Indizes): unverändert vollständig vorhanden
+
+### Summary
+- **Bugs Found in Re-Test:** 0 (beide vorherigen Bugs verifiziert behoben, keine neuen Regressionen)
+- **Production Ready:** YES
+- **Recommendation:** Freigegeben für `/deploy`. Weiterhin offen (kein Blocker für PROJ-1, für Folge-Features vormerken): AC-2 (Signup/E-Mail-Bestätigung) wurde nie end-to-end getestet, da dies einen dauerhaften Auth-User angelegt hätte — sollte spätestens bei PROJ-2 (Login/Signup-UI) mitgetestet werden. Die manuelle Prüfung des „Confirm email"-Toggles im Supabase Dashboard steht ebenfalls noch aus.
 
 ## Deployment
 _To be added by /deploy_
