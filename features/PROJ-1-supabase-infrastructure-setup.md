@@ -1,6 +1,6 @@
 # PROJ-1: Supabase Infrastructure Setup
 
-## Status: In Progress
+## Status: In Review
 **Created:** 2026-09-19
 **Last Updated:** 2026-09-19
 
@@ -134,6 +134,11 @@ Gespeichert in: Supabase (PostgreSQL), abgesichert durch Row Level Security (RLS
 - Keine eigenen API-Routen in `/src/app/api/` angelegt: PROJ-1 ist reine Infrastruktur, CRUD-Zugriffe laufen über den Supabase-Client direkt (durch RLS abgesichert) und werden erst mit den UI-Features PROJ-2/3/4 konsumiert.
 - Deviation: `.env.local` konnte nicht automatisiert befüllt werden (Env-Dateien sind per Projekt-Policy für Read/Write gesperrt) — Nutzer hat URL + Publishable Key erhalten und muss `.env.local` manuell anlegen.
 - Offen / manuell zu prüfen: E-Mail-Bestätigung (Confirm Email) im Supabase Dashboard unter Authentication → Providers → Email verifizieren, da dies über keinen MCP-Tool-Aufruf einsehbar/setzbar ist.
+
+### Bugfix-Runde (nach /qa)
+- `proj1_fix_returning_rls` — behebt BUG-1: Die SELECT-Policy „Members can view their teams" prüfte nur `is_team_member(id)`, was direkt nach dem `INSERT` noch nicht zutraf (der `AFTER INSERT`-Trigger, der den Ersteller als Owner einträgt, ist zu diesem Zeitpunkt der `RETURNING`-Sichtbarkeitsprüfung noch nicht abgeschlossen). Policy erweitert um `OR created_by = (select auth.uid())`, sodass die eigene, gerade erstellte Zeile unabhängig vom Trigger-Timing sichtbar ist.
+- Verifiziert: `INSERT INTO teams (...) RETURNING *` (= Standard-Client-Pattern `.insert().select()`) liefert jetzt die neue Zeile zurück, ohne RLS-Fehler. Security-Advisor weiterhin sauber (0 Findings), Cross-Team-Isolation für Outsider unverändert intakt (Regressionstest bestanden).
+- BUG-2 (anon-Requests werfen rohen DB-Fehler) ist noch offen, wird in einer separaten Runde behoben.
 
 ## QA Test Results
 
