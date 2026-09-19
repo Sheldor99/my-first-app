@@ -138,7 +138,9 @@ Gespeichert in: Supabase (PostgreSQL), abgesichert durch Row Level Security (RLS
 ### Bugfix-Runde (nach /qa)
 - `proj1_fix_returning_rls` — behebt BUG-1: Die SELECT-Policy „Members can view their teams" prüfte nur `is_team_member(id)`, was direkt nach dem `INSERT` noch nicht zutraf (der `AFTER INSERT`-Trigger, der den Ersteller als Owner einträgt, ist zu diesem Zeitpunkt der `RETURNING`-Sichtbarkeitsprüfung noch nicht abgeschlossen). Policy erweitert um `OR created_by = (select auth.uid())`, sodass die eigene, gerade erstellte Zeile unabhängig vom Trigger-Timing sichtbar ist.
 - Verifiziert: `INSERT INTO teams (...) RETURNING *` (= Standard-Client-Pattern `.insert().select()`) liefert jetzt die neue Zeile zurück, ohne RLS-Fehler. Security-Advisor weiterhin sauber (0 Findings), Cross-Team-Isolation für Outsider unverändert intakt (Regressionstest bestanden).
-- BUG-2 (anon-Requests werfen rohen DB-Fehler) ist noch offen, wird in einer separaten Runde behoben.
+- `proj1_fix_anon_rls_error` — behebt BUG-2: `EXECUTE` auf `is_team_member`/`is_team_owner` wieder an `anon` gewährt (war in `proj1_security_hardening` zu strikt entzogen worden). Die Funktionen geben nur einen Boolean basierend auf der eigenen `auth.uid()` der Session zurück (für `anon` immer `false`), daher unschädlich.
+- Verifiziert: `GET /rest/v1/teams` mit `anon`-Key liefert jetzt `200 OK` mit `[]` statt `401`/rohem Postgres-Fehler; direkter RPC-Aufruf `/rest/v1/rpc/is_team_member` liefert `200 OK` mit `false`. Security-Advisor zeigt erwartungsgemäß wieder die (beabsichtigte, dokumentierte) WARN „anon kann SECURITY-DEFINER-Funktion ausführen" — unkritisch, da nur ein Boolean ohne Dateninhalt zurückgegeben wird.
+- Beide QA-Bugs (BUG-1, BUG-2) sind damit gefixt und verifiziert. Status bleibt „In Review" bis zur offiziellen erneuten `/qa`-Abnahme.
 
 ## QA Test Results
 
