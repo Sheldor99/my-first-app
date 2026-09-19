@@ -1,6 +1,6 @@
 # PROJ-1: Supabase Infrastructure Setup
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-19
 **Last Updated:** 2026-09-19
 
@@ -69,12 +69,59 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Row Level Security (RLS) statt Prüfung im Anwendungscode für Datenisolation | Datenbank-erzwungene Sicherheit, unabhängig von Bugs in der Business-Logik | 2026-09-19 |
+| Supabase Auth mit eingebautem E-Mail-Bestätigungs-Flow | Nutzt vorhandene Infrastruktur, kein zusätzlicher E-Mail-Versand-Dienst nötig | 2026-09-19 |
+| Datenbank-Migrationen versioniert im Repository statt manueller Änderungen im Supabase-Dashboard | Nachvollziehbarkeit und Reproduzierbarkeit für Team-Mitglieder und Deployments | 2026-09-19 |
+| Nur der öffentliche Anon-Key wird clientseitig verwendet (kein Service-Role-Key in PROJ-1) | RLS reicht für aktuelle Zugriffsmuster aus; Service-Role erst nötig für spätere Admin-Funktionen ohne Nutzerkontext | 2026-09-19 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+Keine UI-Komponenten — dies ist ein reines Backend-/Infrastruktur-Feature. Die Supabase-Verbindung wird intern von allen nachfolgenden Features (PROJ-2 bis PROJ-10) genutzt.
+
+### Data Model (plain language)
+```
+Teams
+- Name
+- Erstellt von (Nutzer)
+- Erstellungsdatum
+
+Team-Mitgliedschaft (verbindet eine Person mit einem Team)
+- Welches Team
+- Welche Person
+- Rolle: Owner oder Member
+- Beitrittsdatum
+(eine Person kann in mehreren Teams gleichzeitig Mitglied sein)
+
+Projekte
+- Gehört zu genau einem Team
+- Name, Beschreibung
+- Erstellt von, Erstellungsdatum
+
+Aufgaben
+- Gehört zu genau einem Projekt
+- Titel, Beschreibung
+- Status: To Do / In Progress / Done
+- Zugewiesen an (optional, ein Team-Mitglied)
+- Fälligkeitsdatum (optional)
+- Erstellt von, Erstellungs-/Änderungsdatum
+```
+
+Gespeichert in: Supabase (PostgreSQL), abgesichert durch Row Level Security (RLS).
+
+### Tech Decisions
+- Supabase als Backend: bereits im Starter-Kit vorbereitet (Auth + PostgreSQL + Storage), erspart eigene Backend-Infrastruktur
+- Row Level Security statt Prüfung im Anwendungscode: Datenbank erzwingt Datentrennung zwischen Teams, unabhängig von der App-Logik
+- Supabase Auth mit eingebauter E-Mail-Bestätigung: keine zusätzliche Infrastruktur nötig
+- Versionierte Datenbank-Migrationen im Repository: nachvollziehbare, reproduzierbare Schema-Änderungen
+- Nur Anon-Key clientseitig verwendet: RLS reicht für aktuelle Zugriffsmuster aus
+
+### Dependencies
+- `@supabase/supabase-js` — bereits installiert, offizielle Supabase-Client-Bibliothek
+- Keine weiteren Pakete nötig
 
 ## QA Test Results
 _To be added by /qa_
