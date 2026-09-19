@@ -1,14 +1,12 @@
-// Supabase Client Setup
-// Uncomment this file when you're ready to use Supabase
-
-/*
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local (see .env.local.example).'
+  )
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-*/
-
-// For now, export a placeholder to avoid import errors
-export const supabase = null;

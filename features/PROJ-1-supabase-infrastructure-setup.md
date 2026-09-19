@@ -1,6 +1,6 @@
 # PROJ-1: Supabase Infrastructure Setup
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-19
 **Last Updated:** 2026-09-19
 
@@ -122,6 +122,18 @@ Gespeichert in: Supabase (PostgreSQL), abgesichert durch Row Level Security (RLS
 ### Dependencies
 - `@supabase/supabase-js` — bereits installiert, offizielle Supabase-Client-Bibliothek
 - Keine weiteren Pakete nötig
+
+## Implementation Notes (Backend Developer)
+
+- Supabase-Projekt `my-first-app` (ref `yiyddydbkxycswmyisvi`) verbunden, drei Migrationen angewendet:
+  - `proj1_core_schema` — Tabellen `teams`, `team_members`, `projects`, `tasks`; RLS auf allen vier aktiviert; Policies für SELECT/INSERT/UPDATE/DELETE je Team-Mitgliedschaft bzw. Owner-Rolle; Indizes auf allen Fremdschlüssel-Spalten; Trigger `on_team_created` fügt den Ersteller automatisch als `owner` in `team_members` ein; Trigger `on_task_updated` pflegt `updated_at`.
+  - `proj1_security_hardening` — Security-Advisor-Findings behoben: `search_path` auf Trigger-Funktion fixiert, `EXECUTE`-Rechte der `SECURITY DEFINER`-Hilfsfunktionen (`is_team_member`, `is_team_owner`, `handle_new_team`) von `anon`/`public` entzogen.
+  - `proj1_perf_fixes` — fehlende Indizes auf `created_by`-Spalten ergänzt, RLS-Policies auf `(select auth.uid())` umgestellt (vermeidet Re-Evaluation pro Zeile).
+  - Security- und Performance-Advisors danach sauber (verbleibende Warnungen sind beabsichtigt: Helper-Funktionen müssen für `authenticated` ausführbar bleiben, damit RLS-Policies funktionieren).
+- `src/lib/supabase.ts` aktiviert: echter `createClient`-Aufruf statt Platzhalter, wirft beim Start einen klaren Fehler, wenn `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` fehlen (deckt Edge Case „fehlende Umgebungsvariablen" ab).
+- Keine eigenen API-Routen in `/src/app/api/` angelegt: PROJ-1 ist reine Infrastruktur, CRUD-Zugriffe laufen über den Supabase-Client direkt (durch RLS abgesichert) und werden erst mit den UI-Features PROJ-2/3/4 konsumiert.
+- Deviation: `.env.local` konnte nicht automatisiert befüllt werden (Env-Dateien sind per Projekt-Policy für Read/Write gesperrt) — Nutzer hat URL + Publishable Key erhalten und muss `.env.local` manuell anlegen.
+- Offen / manuell zu prüfen: E-Mail-Bestätigung (Confirm Email) im Supabase Dashboard unter Authentication → Providers → Email verifizieren, da dies über keinen MCP-Tool-Aufruf einsehbar/setzbar ist.
 
 ## QA Test Results
 _To be added by /qa_
