@@ -1,6 +1,6 @@
 # PROJ-1: Supabase Infrastructure Setup
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-19
 **Last Updated:** 2026-09-19
 
@@ -246,6 +246,29 @@ Gespeichert in: Supabase (PostgreSQL), abgesichert durch Row Level Security (RLS
 - **Bugs Found in Re-Test:** 0 (beide vorherigen Bugs verifiziert behoben, keine neuen Regressionen)
 - **Production Ready:** YES
 - **Recommendation:** Freigegeben für `/deploy`. Weiterhin offen (kein Blocker für PROJ-1, für Folge-Features vormerken): AC-2 (Signup/E-Mail-Bestätigung) wurde nie end-to-end getestet, da dies einen dauerhaften Auth-User angelegt hätte — sollte spätestens bei PROJ-2 (Login/Signup-UI) mitgetestet werden. Die manuelle Prüfung des „Confirm email"-Toggles im Supabase Dashboard steht ebenfalls noch aus.
+
+## Deployment
+
+**Deployed:** 2026-09-19
+**Art:** Lokaler Produktions-Build (`npm run build` + `npm run start`), bewusst **kein** Vercel-Deployment auf Nutzerwunsch — kein Vercel-Account vorhanden/gewünscht
+**URL:** http://localhost:3000 (nur lokal erreichbar, keine öffentliche URL)
+**Backend:** Supabase-Projekt `my-first-app` (`yiyddydbkxycswmyisvi`), live, alle Migrationen angewendet
+
+### Durchgeführte Checks
+- [x] `npm run build` erfolgreich (Turbopack, keine TypeScript-Fehler)
+- [x] Lokaler Produktions-Server (`next start`) startet und antwortet mit `200 OK` im echten Production-Modus (kein Dev-/HMR-Modus)
+- [x] Keine Secrets im Git-Repo (`git ls-files` geprüft — nur `.env.local.example` getrackt)
+- [x] Alle Datenbank-Migrationen in Supabase angewendet und per QA verifiziert
+- [x] Code committed und nach `origin/main` gepusht (GitHub: `Sheldor99/my-first-app`)
+- [ ] `npm run lint` schlägt fehl — vorbestehendes Problem (Next.js 16 + ESLint 9 ohne `eslint.config.js`), unabhängig von PROJ-1, auf Nutzerwunsch zurückgestellt (separates Ticket)
+
+### Nicht zutreffend (kein Vercel-Deployment)
+- Vercel-Projekt-Setup, Environment-Variablen im Vercel-Dashboard, Domain-Konfiguration, Error-Tracking/Security-Headers/Lighthouse-Check — diese Schritte sind für einen späteren echten Produktiv-Launch relevant, wurden für dieses lokale Deployment übersprungen.
+
+### Bekannte offene Punkte für einen späteren echten Launch
+- ESLint-Konfiguration reparieren (`eslint.config.js` fehlt)
+- AC-2 (Signup/E-Mail-Bestätigung) end-to-end testen, sobald PROJ-2 die UI liefert
+- „Confirm email"-Einstellung im Supabase Dashboard manuell verifizieren
 
 ## Deployment
 _To be added by /deploy_
