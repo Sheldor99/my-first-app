@@ -1,6 +1,6 @@
 # PROJ-2: Login/Signup (Auth)
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-20
 **Last Updated:** 2026-09-20
 
@@ -147,6 +147,25 @@ Für PROJ-2 wird keine neue Datenbanktabelle benötigt. Nutzerkonten (E-Mail, Pa
 
 ### Dependencies
 - `@supabase/ssr` — ermöglicht serverseitiges Session-Handling (Middleware, geschützte Seiten)
+
+## Implementation Notes (Frontend Developer)
+
+- `@supabase/ssr` installiert; `src/lib/supabase/client.ts` (ersetzt das alte `src/lib/supabase.ts` aus PROJ-1) exportiert `createClient()` für Client Components, mit derselben Env-Var-Validierung wie zuvor.
+- `src/lib/validations/auth.ts`: Zod-Schemas für Login, Signup, Forgot-Password, Reset-Password (inkl. Passwort-Policy: min. 10 Zeichen + Groß-/Kleinbuchstabe + Zahl, Passwort-Bestätigung per `.refine()`).
+- Vier neue Seiten (`/login`, `/signup`, `/forgot-password`, `/reset-password`) mit zugehörigen Formular-Komponenten in `src/components/auth/`, aufgebaut auf shadcn/ui (`Form`, `Input`, `Button`, `Card`, `Alert`, `Skeleton`) + react-hook-form.
+- `src/app/page.tsx` umgebaut zu Client Component: zeigt "Eingeloggt als [E-Mail]" + Logout, oder einen Login-Link, je nach Supabase-Session.
+- `<Toaster />` (sonner) in `src/app/layout.tsx` eingehängt für transiente Erfolgsmeldungen (z. B. Resend-Bestätigung).
+- **Noch nicht gebaut (bewusst, siehe Tech Design):** `middleware.ts` für Routenschutz und die Route `/auth/confirm` zum Austausch der E-Mail-Links gegen eine Session — beides gehört zu `/backend`. Die Reset-Password-Seite prüft daher aktuell clientseitig per `getSession()`, ob eine gültige Recovery-Session vorliegt, und zeigt sonst den "Link abgelaufen"-Zustand.
+- Alle Catch-Blöcke loggen den echten Fehler zusätzlich per `console.error`, bevor die generische Nutzer-Fehlermeldung angezeigt wird (erleichtert Debugging, ohne das Enumeration-Schutz-Verhalten für Endnutzer zu ändern).
+
+### Manuelles Testen (Browser)
+- Client-seitige Validierung (leeres Formular, zu kurzes/zu schwaches Passwort, nicht übereinstimmende Passwörter) auf Login und Signup verifiziert.
+- Echter Signup-Request gegen das Live-Supabase-Projekt verifiziert: `@example.com`-Adressen werden von Supabase serverseitig als ungültige Domain abgelehnt (`email_address_invalid`) — kein Bug, sondern Supabase-eigener Schutz vor Placeholder-Domains; mit einer echten Testdomain reagiert die API korrekt (dort dann `over_email_send_rate_limit`, da das Projekt-E-Mail-Kontingent durch die vielen Testversuche in dieser Session bereits ausgeschöpft war).
+- Login mit falschen Zugangsdaten verifiziert: zeigt die generische Meldung „E-Mail oder Passwort ist falsch".
+- Reset-Password-Seite ohne gültige Session verifiziert: zeigt korrekt „Link ist abgelaufen oder wurde bereits verwendet" mit Link zu `/forgot-password`.
+- Startseite ohne Login verifiziert: zeigt „Du bist nicht eingeloggt" + Login-Button.
+- Vollständiger Confirm-/Reset-Link-Flow (E-Mail-Bestätigung, tatsächlicher Login nach Bestätigung, Passwort-Reset per Link) konnte mangels `/auth/confirm`-Route und E-Mail-Rate-Limit noch nicht end-to-end getestet werden — folgt nach `/backend`.
+- Deviation: `.env.local` fehlte zunächst im Projekt trotz gegenteiliger Annahme des Nutzers; nach Anlegen der Datei und Neustart des Dev-Servers funktionierte alles wie erwartet.
 
 ## QA Test Results
 _To be added by /qa_
