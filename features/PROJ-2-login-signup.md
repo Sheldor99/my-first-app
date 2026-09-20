@@ -167,6 +167,25 @@ Für PROJ-2 wird keine neue Datenbanktabelle benötigt. Nutzerkonten (E-Mail, Pa
 - Vollständiger Confirm-/Reset-Link-Flow (E-Mail-Bestätigung, tatsächlicher Login nach Bestätigung, Passwort-Reset per Link) konnte mangels `/auth/confirm`-Route und E-Mail-Rate-Limit noch nicht end-to-end getestet werden — folgt nach `/backend`.
 - Deviation: `.env.local` fehlte zunächst im Projekt trotz gegenteiliger Annahme des Nutzers; nach Anlegen der Datei und Neustart des Dev-Servers funktionierte alles wie erwartet.
 
+## Implementation Notes (Backend Developer)
+
+- `src/lib/supabase/server.ts`: Server-seitiger Supabase-Client (`@supabase/ssr`'s `createServerClient`) für Server Components und Route Handler, liest/schreibt Cookies über `next/headers`.
+- `src/proxy.ts`: Routenschutz. Prüft per `supabase.auth.getUser()` (nicht `getSession()`, da dies das Token serverseitig revalidiert statt dem Cookie blind zu vertrauen), ob ein Nutzer eingeloggt ist. Nicht eingeloggte Nutzer werden von allen Routen außer `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/auth/confirm` zu `/login` umgeleitet. Eingeloggte Nutzer werden von `/login`/`/signup` zu `/` umgeleitet.
+- `src/app/auth/confirm/route.ts`: Nimmt die `token_hash`/`type`-Parameter aus den Supabase-E-Mail-Links entgegen, tauscht sie per `verifyOtp()` gegen eine Session, und leitet zum `next`-Parameter weiter (Standard-Supabase-Pattern für SSR-Apps). Bei Fehler: Redirect zu `/login?error=invalid_link`.
+- Signup- und Resend-Formulare (`signup-form.tsx`, `login-form.tsx`) übergeben jetzt `emailRedirectTo` mit `next=/login?confirmed=true`, damit die Bestätigung nach dem Klick auf der Login-Seite eine Erfolgsmeldung zeigt.
+
+### Wichtiger Fix während der Implementierung: `middleware.ts` → `src/proxy.ts`
+- Next.js 16 hat den `middleware`-Dateikonvention zu `proxy` umbenannt (`middleware` ist deprecated, siehe `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`). Eine `middleware.ts` im Projekt-Root wurde vom Dev-Server stillschweigend **nicht ausgeführt** (kein Fehler, aber auch kein Routenschutz) — das Problem war nicht Middleware-Deprecation allein, sondern zusätzlich der **Speicherort**: Bei einer `src/`-Projektstruktur muss die Datei als `src/proxy.ts` (neben `src/app/`) liegen, nicht im Repo-Root. Erst `src/proxy.ts` mit `export function proxy(...)` wurde tatsächlich aufgerufen (verifiziert per Log-Zeile `proxy.ts: 6ms` in der Next.js-Request-Timing-Ausgabe).
+
+### Manuelles Testen (Browser, echtes Supabase-Projekt)
+- Routenschutz verifiziert: unauthentifizierter Aufruf von `/` leitet zu `/login` um; `/signup` bleibt ohne Session erreichbar.
+- Login mit einem per SQL angelegten, bereits bestätigten Test-User verifiziert: erfolgreicher Login redirected zu `/`, zeigt „Eingeloggt als [E-Mail]".
+- Eingeloggter Zustand + `/login`-Aufruf verifiziert: leitet automatisch zu `/` um (Auth-Only-Redirect der Proxy).
+- Logout verifiziert: Session wird beendet, Redirect zu `/login`; anschließender Aufruf von `/` leitet wieder zu `/login` um (Session wirklich weg, nicht nur clientseitig ausgeblendet).
+- `/auth/confirm` mit ungültigem `token_hash` verifiziert: redirected korrekt zu `/login?error=invalid_link`, Fehlermeldung erscheint.
+- Nicht end-to-end testbar: echter Klick auf einen per E-Mail verschickten Bestätigungs-/Reset-Link, da das Supabase-Projekt-E-Mail-Kontingent durch die vielen Tests in dieser Session ausgeschöpft ist (`over_email_send_rate_limit`). Die Route-Handler-Logik folgt exakt dem offiziell dokumentierten Supabase-SSR-Muster; Empfehlung: nach Ablauf des Rate-Limit-Fensters (oder mit eigenem SMTP-Provider) einmal real durchklicken.
+- Alle Test-User (SQL-angelegt) nach Testende wieder gelöscht.
+
 ## QA Test Results
 _To be added by /qa_
 

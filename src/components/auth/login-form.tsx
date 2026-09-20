@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -21,6 +22,10 @@ import {
 } from "@/components/ui/form"
 
 export function LoginForm() {
+  const searchParams = useSearchParams()
+  const justConfirmed = searchParams.get("confirmed") === "true"
+  const invalidLink = searchParams.get("error") === "invalid_link"
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isResending, setIsResending] = useState(false)
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null)
@@ -71,10 +76,14 @@ export function LoginForm() {
     setIsResending(true)
 
     try {
+      const confirmUrl = new URL("/auth/confirm", window.location.origin)
+      confirmUrl.searchParams.set("next", "/login?confirmed=true")
+
       const supabase = createClient()
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: unconfirmedEmail,
+        options: { emailRedirectTo: confirmUrl.toString() },
       })
 
       if (error) {
@@ -93,6 +102,22 @@ export function LoginForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {justConfirmed && (
+          <Alert>
+            <AlertDescription>
+              E-Mail bestätigt. Du kannst dich jetzt einloggen.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {invalidLink && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              Dieser Link ist ungültig oder abgelaufen.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {formError && (
           <Alert variant="destructive">
             <AlertDescription>{formError}</AlertDescription>

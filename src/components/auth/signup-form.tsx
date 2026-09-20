@@ -34,10 +34,14 @@ export function SignupForm() {
     setFormError(null)
 
     try {
+      const confirmUrl = new URL("/auth/confirm", window.location.origin)
+      confirmUrl.searchParams.set("next", "/login?confirmed=true")
+
       const supabase = createClient()
       const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
+        options: { emailRedirectTo: confirmUrl.toString() },
       })
 
       if (error) {
