@@ -16,7 +16,7 @@
 | ID | Feature | Priority | Dependencies | Status | Spec | Created |
 |----|---------|----------|--------------|--------|------|---------|
 | PROJ-1 | Supabase Infrastructure Setup | P0 | None | Deployed | [PROJ-1](PROJ-1-supabase-infrastructure-setup.md) | 2026-09-18 |
-| PROJ-2 | Team-Mitglieder einladen/verwalten (Auth) | P0 | PROJ-1 | Roadmap | - | 2026-09-18 |
+| PROJ-2 | Login/Signup (Auth) | P0 | PROJ-1 | Planned | [PROJ-2](PROJ-2-login-signup.md) | 2026-09-18 |
 | PROJ-3 | Projekte anlegen/verwalten | P0 | PROJ-1, PROJ-2 | Roadmap | - | 2026-09-18 |
 | PROJ-4 | Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum | P0 | PROJ-1, PROJ-3 | Roadmap | - | 2026-09-18 |
 | PROJ-5 | Kanban-Board-Ansicht pro Projekt | P0 | PROJ-4 | Roadmap | - | 2026-09-18 |
@@ -25,7 +25,8 @@
 | PROJ-8 | Zeiterfassung | P2 | PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-9 | Reporting/Analytics-Dashboard | P2 | PROJ-3, PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-10 | Benachrichtigungen | P2 | PROJ-4, PROJ-6 | Roadmap | - | 2026-09-18 |
+| PROJ-11 | Team-Mitglieder einladen/verwalten | P0 | PROJ-1, PROJ-2 | Roadmap | - | 2026-09-20 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-11
+## Next Available ID: PROJ-12

@@ -10,7 +10,8 @@ Kleine Software-/Kreativ-Agenturteams (3–10 Personen), die mehrere Kundenproje
 
 | Priority | Feature | Status |
 |----------|---------|--------|
-| P0 (MVP) | Supabase Infrastructure Setup | Planned |
+| P0 (MVP) | Supabase Infrastructure Setup | Deployed |
+| P0 (MVP) | Login/Signup (Auth) | Planned |
 | P0 (MVP) | Projekte anlegen/verwalten | Roadmap |
 | P0 (MVP) | Team-Mitglieder einladen/verwalten | Roadmap |
 | P0 (MVP) | Aufgaben (Tasks) mit Status, Zuweisung, Fälligkeitsdatum | Roadmap |
