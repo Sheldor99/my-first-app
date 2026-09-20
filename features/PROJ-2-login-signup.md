@@ -93,12 +93,60 @@ _Keine offenen Fragen — im Interview geklärt._
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| `@supabase/ssr` statt nur `@supabase/supabase-js` | Middleware muss serverseitig prüfen können, ob ein Nutzer eingeloggt ist; dafür muss die Session cookie-basiert und vom Server lesbar sein, nicht nur im Browser-localStorage | 2026-09-20 |
+| Bestätigungs-/Reset-Links laufen über eine technische Route `/auth/confirm` statt direkt auf die Zielseite | Supabase-Links enthalten einen Code, der serverseitig gegen eine Session getauscht werden muss, bevor der Nutzer sinnvoll weitergeleitet werden kann | 2026-09-20 |
+| Kein eigenes API-Backend für Login/Signup/Reset | Formulare sprechen Supabase Auth direkt über den öffentlichen Schlüssel an; das ist von Supabase als sicher vorgesehen und spart eine unnötige Zwischenschicht | 2026-09-20 |
+| Routenschutz zentral in `middleware.ts`, nicht pro Seite | Ein einziger, nicht umgehbarer Prüfpunkt für alle aktuellen und künftigen geschützten Routen | 2026-09-20 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+/login (Seite)
+├── LoginForm
+│   ├── E-Mail-Feld, Passwort-Feld
+│   ├── "Passwort vergessen?"-Link → /forgot-password
+│   ├── "Noch kein Konto? Registrieren"-Link → /signup
+│   └── Fehleranzeige (generische Meldung / "E-Mail nicht bestätigt" + Resend-Button)
+
+/signup (Seite)
+├── SignupForm
+│   ├── E-Mail-, Passwort-, Passwort-bestätigen-Feld
+│   ├── "Bereits ein Konto? Login"-Link → /login
+│   └── Erfolgsanzeige ("Prüfe deine E-Mails")
+
+/forgot-password (Seite)
+├── ForgotPasswordForm (E-Mail-Feld)
+└── Generische Bestätigungsanzeige nach Absenden
+
+/reset-password (Seite, aufgerufen über Link aus der E-Mail)
+├── ResetPasswordForm (neues Passwort + Bestätigung)
+└── Fehleranzeige bei abgelaufenem/ungültigem Link + "Neuen Link anfordern"
+
+/auth/confirm (technische Route, kein sichtbares UI)
+└── Verarbeitet Bestätigungs-/Reset-Links von Supabase, leitet dann passend weiter
+
+middleware.ts (kein UI)
+└── Prüft bei jedem Seitenaufruf die Session, leitet um wenn nötig
+
+/ (Startseite, angepasst)
+└── Eingeloggt-Zustand: "Eingeloggt als [E-Mail]" + Logout-Button (Platzhalter bis PROJ-3)
+```
+
+### Data Model (plain language)
+Für PROJ-2 wird keine neue Datenbanktabelle benötigt. Nutzerkonten (E-Mail, Passwort-Hash, Bestätigungsstatus) werden komplett von Supabase Auth intern verwaltet — das ist bereits seit PROJ-1 eingerichtet. PROJ-2 baut nur die Oberfläche und die Verbindungslogik dazu.
+
+### Tech Decisions
+- Neues Paket `@supabase/ssr` nötig: Das bisher installierte Supabase-Paket funktioniert nur im Browser. Da die Middleware serverseitig prüfen muss, ob jemand eingeloggt ist, brauchen wir eine Variante, die den Login-Status sicher in einem Cookie speichert, das auch der Server lesen kann.
+- Formulare mit react-hook-form + Zod: Wie im Projekt-Standard festgelegt — Zod definiert die Passwort-Regeln einmal, wird für Client- und Server-Validierung wiederverwendet.
+- Bestätigungs-/Reset-Links laufen über eine technische Zwischenseite (`/auth/confirm`): Supabase schickt Links, die zuerst serverseitig verarbeitet werden müssen, bevor der Nutzer zur richtigen Seite weitergeleitet wird.
+- Kein eigenes Backend/API für Login/Signup nötig: Die Formulare sprechen Supabase Auth direkt an — spart Entwicklungsaufwand ohne Sicherheitsnachteil.
+
+### Dependencies
+- `@supabase/ssr` — ermöglicht serverseitiges Session-Handling (Middleware, geschützte Seiten)
 
 ## QA Test Results
 _To be added by /qa_
