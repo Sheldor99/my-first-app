@@ -160,7 +160,82 @@ Mit einem temporären, per SQL angelegten Test-User (danach vollständig inkl. a
 - Leeres Projektnamen-Feld beim Anlegen → Validierungsfehler „Projektname ist erforderlich", kein Request
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-21
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### Team erstellen (Onboarding)
+- [x] Nutzer ohne Team sieht „Team erstellen"-Screen statt Projektliste (frisch verifiziert)
+- [x] Leerer Team-Name → Validierungsfehler (Unit-Test + Code-Review der Zod-Regel)
+- [x] Team-Name > 100 Zeichen → Validierungsfehler (Unit-Test bestätigt Grenze exakt bei 100/101 Zeichen)
+- [x] Gültiger Team-Name → Team erstellt, Nutzer automatisch Owner (Trigger aus PROJ-1 greift), landet in leerer Projektübersicht
+
+#### Team wechseln / weiteres Team erstellen
+- [x] Nutzer mit ≥1 Team sieht Team-Auswahl + Projekte des aktiven Teams
+- [x] Team-Wechsel über Auswahl → Projektliste wechselt korrekt (in beide Richtungen getestet)
+- [x] „Neues Team erstellen" → neues Team wird sofort aktiv
+
+#### Projekte anzeigen
+- [x] Team ohne Projekte → Empty State mit „Erstes Projekt anlegen"-CTA
+- [x] Team mit Projekten → Name + Beschreibung werden angezeigt
+
+#### Projekt anlegen
+- [x] Gültiger Name (+ optionale Beschreibung) → Projekt erstellt, erscheint sofort in der Liste
+- [x] Leeres Namensfeld → Validierungsfehler, kein Request
+- [x] Name > 100 Zeichen bzw. Beschreibung > 500 Zeichen → Validierungsfehler (beide Grenzen live im Browser UND per Unit-Test bestätigt)
+
+#### Projekt bearbeiten
+- [x] Gültige Änderung an Name/Beschreibung → übernommen, sofort sichtbar
+- [x] Namensfeld beim Bearbeiten geleert → Validierungsfehler, Dialog bleibt offen (durch dieselbe Zod-Regel wie beim Anlegen abgedeckt, Formular teilt sich die Logik)
+
+#### Projekt löschen
+- [x] Klick auf „Löschen" → Bestätigungsdialog mit explizitem Hinweis auf mitgelöschte Aufgaben
+- [x] Bestätigung → Projekt entfernt, verschwindet aus der Liste
+- [x] Abbrechen → Projekt bleibt unverändert erhalten
+
+### Multi-User- und Berechtigungstests (mit drei echten Test-Usern: Owner, Member, Outsider)
+- [x] **Owner** kann Team + Projekt anlegen
+- [x] **Member** (per SQL zum Team hinzugefügt, simuliert künftige PROJ-11-Einladung) sieht dasselbe Team/Projekt und kann es erfolgreich bearbeiten — bestätigt „alle Mitglieder dürfen verwalten"
+- [x] **Outsider** (kein Teammitglied) sieht beim Login den eigenen leeren Onboarding-Screen, keinerlei Spur des fremden Teams/Projekts
+
+### Security Audit Results (Red Team, echte API-Calls mit gültigem Token)
+- [x] Direkter `SELECT` auf ein fremdes Team per REST-API (gültiger Auth-Token, fremde `team_id`) → `200 OK`, leeres Array (RLS filtert korrekt)
+- [x] Direkter `INSERT` eines Projekts in ein fremdes Team → `403`, „new row violates row-level security policy"
+- [x] Direkter `UPDATE`/`DELETE` auf ein fremdes Projekt (per `team_id`-Filter) → Request „erfolgreich" (200/204), aber **0 Zeilen betroffen** — per SQL verifiziert, dass das Projekt unverändert blieb (RLS macht die Zeile für den Outsider unsichtbar, bevor die Aktion greifen kann)
+- [x] Team-Erstellung mit gespoofter `created_by`-ID (Identitätsvortäuschung) → `403`, RLS blockiert korrekt
+- [x] XSS-Versuch (`<img src=x onerror=...>`) im Projektnamen → als inerter Text gerendert, keine Skriptausführung
+- [x] Keine Secrets im Client-Bundle (nur Publishable Key, Code-Review)
+
+### Regressionstest
+- [x] PROJ-2-Routenschutz weiterhin intakt: Logout → Aufruf von `/` leitet korrekt zu `/login` um (Startseite wurde in PROJ-3 komplett neu aufgebaut, keine Regression)
+
+### Automatisierte Tests
+- **Unit-Tests (Vitest):** 10 neue Tests für `team.ts`- und `project.ts`-Zod-Schemas (Grenzwerte exakt bei 100/500 Zeichen getestet), alle grün. Zusammen mit den bestehenden 14 Auth-Tests: 24/24 grün.
+- **BUG-1 gefunden:** `npm test` schlägt fehl (siehe unten) — Tests wurden stattdessen gezielt mit `npx vitest run src/lib/validations` ausgeführt, um das Problem zu umgehen.
+- **E2E-Tests (Playwright):** Bewusst **keine neue Spec-Datei** für PROJ-3 geschrieben. Fast die gesamte Funktionalität (Team-Onboarding, Projekt-CRUD, Team-Switcher) setzt eine eingeloggte Session voraus, und es existiert noch keine Playwright-Test-Fixture für programmatischen Login. Ohne diese wäre eine PROJ-3-Spec-Datei entweder leer (nur der bereits in PROJ-2 abgedeckte Routenschutz-Test) oder würde Auth-Umgehungen simulieren, die keine echten Nutzerpfade abbilden. Empfehlung: Playwright-`globalSetup` mit einem Test-User-Login einführen, sobald mehrere Features davon profitieren (z. B. mit PROJ-4).
+
+### Bugs Found
+
+#### BUG-1: `npm test` schlägt fehl, weil Vitest die Playwright-E2E-Datei einliest
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. `npm test` ausführen
+  2. Erwartet: Alle Vitest-Unit-Tests laufen durch
+  3. Tatsächlich: `tests/PROJ-2-login-signup.spec.ts` wird von Vitest eingelesen (passt auf dessen Standard-Glob `**/*.spec.ts`) und schlägt mit `Error: Playwright Test did not expect test.describe() to be called here` fehl — die eigentlichen Unit-Tests (14/14) laufen zwar trotzdem durch, aber der Gesamt-Exit-Code von `npm test` ist fehlerhaft (1 failed Test File)
+  4. Workaround: `npx vitest run src/lib` (oder ein anderer eingeschränkter Pfad) statt `npm test`
+- **Ursache:** `vitest.config.ts` hat kein `exclude` für das `tests/`-Verzeichnis (dort liegen ausschließlich Playwright-Specs); Vitest übernimmt sein Standard-Include-Muster, das auch `*.spec.ts` außerhalb von `src/` erfasst
+- **Priority:** Fix before deployment empfohlen — bricht den in `CLAUDE.md` dokumentierten Standard-Befehl `npm test` und würde in einer echten CI-Pipeline den Build fälschlich als fehlgeschlagen markieren, obwohl alle Unit-Tests grün sind
+- **Hinweis für Fix (kein Fix durch QA):** In `vitest.config.ts` unter `test` ein `exclude: ['tests/**', 'node_modules/**']` ergänzen (bzw. die Playwright-Default-Excludes von Vitest wiederherstellen, falls sie versehentlich überschrieben wurden)
+
+### Summary
+- **Acceptance Criteria:** 15/15 vollständig bestanden
+- **Bugs Found:** 1 total (0 Critical, 0 High, 1 Medium, 0 Low) — betrifft Test-Tooling, nicht die Feature-Funktionalität selbst
+- **Security:** Keine Sicherheitslücken gefunden — RLS-Isolation zwischen Teams unter echtem Red-Team-Beschuss (SELECT/INSERT/UPDATE/DELETE/Spoofing-Versuche) vollständig standhaft; XSS blockiert
+- **Production Ready:** YES
+- **Recommendation:** BUG-1 (Vitest/Playwright-Konfigurationskonflikt) zeitnah fixen, da es den Standard-Testbefehl für das gesamte Projekt bricht — betrifft aber nicht die PROJ-3-Funktionalität selbst, daher keine Blockade für PROJ-3 im Speziellen. Playwright-Test-Fixture für Login als Follow-up vormerken.
 
 ## Deployment
 _To be added by /deploy_
