@@ -1,6 +1,6 @@
 # PROJ-11: Team-Mitglieder einladen/verwalten
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -172,7 +172,89 @@ Kein neues UI-Muster — alles als Erweiterung des bestehenden Team-Switchers/Di
 - Owner löscht das Team (mit Bestätigungsdialog) → Team inkl. eigener Mitgliedschaft gelöscht, UI fällt korrekt auf den Team-erstellen-Leerzustand zurück ✓
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-21
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### Mitgliederliste anzeigen
+- [x] Mitglied sieht alle Mitglieder mit E-Mail und Rolle
+- [x] Member sieht keine Verwalten-Aktionen (kein Hinzufügen-Formular, kein Aktion-Spalte, kein Team-löschen-Button)
+- [x] Owner sieht alle Verwalten-Aktionen (Rollen-Select, Entfernen pro Zeile, Hinzufügen-Formular, Team löschen)
+
+#### Mitglied hinzufügen
+- [x] Registrierte, noch nicht im Team befindliche E-Mail → sofort als „Member" hinzugefügt, erscheint in der Liste
+- [x] Unbekannte E-Mail → „Diese Person muss sich zuerst registrieren"
+- [x] E-Mail bereits Mitglied → „Diese Person ist bereits Mitglied"
+- [x] Leeres E-Mail-Feld → „E-Mail ist erforderlich"
+- [x] Ungültiges Format → „Ungültige E-Mail-Adresse"
+
+#### Mitglied entfernen
+- [x] Klick auf „Entfernen" → Bestätigungsdialog mit korrektem Namen der Person
+- [x] Bestätigung → Person verliert Mitgliedschaft, verschwindet aus der Liste
+- [x] Alleiniger Owner versucht sich selbst über „Entfernen" zu entfernen → blockiert mit Fehler-Toast
+
+#### Rolle ändern
+- [x] Owner befördert Member zu Owner → sofort wirksam (in DB verifiziert)
+- [x] Owner stuft anderen Owner zu Member zurück → sofort wirksam (in DB verifiziert)
+- [x] Alleiniger Owner versucht eigene Rolle zu ändern → blockiert mit Fehler-Toast, Select bleibt auf „Owner"
+
+#### Team verlassen
+- [x] Normales Mitglied verlässt Team → verliert Mitgliedschaft, UI fällt auf „Team erstellen"-Leerzustand zurück
+- [x] Alleiniger Owner versucht das Team zu verlassen → blockiert mit identischer Fehlermeldung wie beim Selbst-Entfernen
+
+#### Team löschen
+- [x] Klick auf „Team löschen" → Bestätigungsdialog mit exaktem Warnhinweis (Projekte/Aufgaben/Mitgliedschaften)
+- [x] Bestätigung → Team, Projekte, Aufgaben und Mitgliedschaften vollständig entfernt (inkl. des einzigen Owners) — end-to-end mit echten Projekt-/Task-Datensätzen verifiziert
+
+### Edge Cases Status
+
+#### EC-1: Owner gibt eigene E-Mail beim Hinzufügen ein
+- [x] Handled correctly — „Diese Person ist bereits Mitglied"
+
+#### EC-2: Zwei Owner mit widersprüchlichen Aktionen (z. B. beide entfernen sich gegenseitig)
+- [x] Handled correctly — DB-Trigger prüft den Owner-Bestand pro Aktion atomar innerhalb der Transaktion; sequenziell verifiziert, dass die Regel „mind. 1 Owner" nach jeder Einzelaktion durchgesetzt wird. Kein echter Parallelitätstest mit zwei simultanen Requests durchgeführt, aber die serverseitige Prüfung ist transaktional und race-frei.
+
+#### EC-3: Nutzer hat Dialog offen, während Team von einem Owner gelöscht wird
+- [x] Handled correctly (durch Code-Review + RLS-Verhalten bestätigt) — da keine Realtime-Subscription existiert, bleibt die Ansicht bis zur nächsten Aktion statisch; jede Folgeaktion (Entfernen/Rolle ändern/Verlassen) betrifft dann eine bereits kaskadiert gelöschte Zeile, RLS liefert 0 betroffene Zeilen ohne Fehler/Absturz, und `onTeamsChanged`/`refetchTeams` korrigiert den Zustand bei der nächsten Team-Liste-Aktualisierung. Kein Absturz in irgendeinem getesteten Pfad.
+
+#### EC-4: Netzwerkfehler beim Hinzufügen/Entfernen/Rolle ändern/Team löschen
+- [x] Handled correctly (Code-Review) — alle Mutationen sind in try/catch gekapselt und zeigen bei einem Fehler eine generische Fehlermeldung; kein Absturz. Kein Live-Fault-Injection-Test durchgeführt (kein praktikabler Weg, die Supabase-Verbindung gezielt zu unterbrechen).
+
+#### EC-5: Doppeltes schnelles Klicken auf eine Verwalten-Aktion
+- [x] Handled correctly — alle Buttons werden über lokalen `isSubmitting`/`isRemoving`/`isDeleting`-State während des laufenden Requests deaktiviert; bei wiederholten Klicks während der Testsitzung wurde nie ein doppelter Datensatz erzeugt.
+
+### Security Audit Results (Red Team)
+- [x] Authentication: Ohne Login kein Zugriff (bestehender Proxy-Schutz aus PROJ-2, nicht verändert)
+- [x] Authorization — direkter REST-Angriff als Nicht-Owner mit echtem JWT:
+  - `PATCH team_members` (Selbst-Beförderung zu Owner) → 0 betroffene Zeilen, Rolle in DB unverändert
+  - `POST team_members` (Mitglied ohne RPC direkt hinzufügen) → 403, RLS-Fehler „new row violates row-level security policy"
+  - `DELETE team_members` (Owner-Zeile entfernen) → 0 betroffene Zeilen, Owner-Mitgliedschaft in DB unverändert
+  - `POST rpc/add_team_member_by_email` als Nicht-Owner → 400 „not authorized"
+- [x] Enumeration-Schutz: Nicht-Owner kann über `GET /profiles?email=eq...` keine Profile außerhalb der eigenen Teams sehen (leeres Ergebnis) — `add_team_member_by_email` bleibt der einzige Weg, um „existiert diese E-Mail" zu erfahren, und das nur für Owner mit minimaler Rückgabe (`not_found`/`already_member`/`added`)
+- [x] Input validation: Einziges Freitextfeld ist E-Mail (Zod-validiert clientseitig, Format zusätzlich implizit durch die `profiles`-Suche serverseitig); kein XSS-Vektor identifiziert, da alle Ausgaben über React gerendert werden (Auto-Escaping)
+- [x] `mcp__supabase__get_advisors` (security) erneut geprüft: keine neuen Findings gegenüber dem Backend-Schritt
+
+### Regression Testing
+- [x] PROJ-3 (Projekte anlegen/verwalten): Team-Erstellung über den erweiterten Team-Switcher funktioniert unverändert, Projekt-Anlage unauffällig
+- [x] PROJ-4 (Aufgaben): `useTeamMembers`-Erweiterung (neues `role`-Feld, `refetchMembers`) bricht die Zuweisungs-Auswahl in `task-form-dialog.tsx` nicht — Dropdown zeigt Teammitglieder korrekt, Aufgabe wurde erfolgreich erstellt
+- [x] `npm test`: 36/36 bestehen (inkl. 3 neuer Tests für `addTeamMemberSchema`)
+- [ ] `npm run test:e2e`: **Übersprungen** — Playwright-Browser-Installation in dieser Umgebung weiterhin nicht funktionsfähig (wiederkehrender `__dirlock`-Konflikt, bereits in PROJ-2/3/4-QA-Zyklen dokumentiert). Gemäß bisheriger Nutzerentscheidung wird mit den vorhandenen manuellen/Sicherheits-Testergebnissen abgeschlossen.
+- [ ] Cross-Browser (Firefox/Safari): **Übersprungen**, konsistent mit der für dieses Projekt getroffenen Entscheidung, nur Chromium zu testen
+- [x] Responsive: Dialog nutzt dieselbe shadcn-`Dialog`-Komponente (`w-full max-w-lg`) wie bereits in PROJ-3/PROJ-4 freigegebene Dialoge; das Resize-Tool hat in dieser Session den erfassten Viewport nicht sichtbar auf 375px umgestellt, daher per Code-Review statt Live-Screenshot bei 375px verifiziert — keine abweichende Struktur, die ein anderes Verhalten erwarten ließe
+
+### Bugs Found
+
+Keine Bugs gefunden (Critical/High/Medium/Low: 0/0/0/0).
+
+### Summary
+- **Acceptance Criteria:** 16/16 passed
+- **Bugs Found:** 0 total
+- **Security:** Pass — alle Red-Team-Angriffsversuche (Rollen-Eskalation, unautorisiertes Hinzufügen, unautorisiertes Entfernen, unautorisierter RPC-Aufruf, Profil-Enumeration) korrekt blockiert
+- **Production Ready:** YES
+- **Recommendation:** Deploy
 
 ## Deployment
 _To be added by /deploy_

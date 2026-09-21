@@ -25,7 +25,7 @@
 | PROJ-8 | Zeiterfassung | P2 | PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-9 | Reporting/Analytics-Dashboard | P2 | PROJ-3, PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-10 | Benachrichtigungen | P2 | PROJ-4, PROJ-6 | Roadmap | - | 2026-09-18 |
-| PROJ-11 | Team-Mitglieder einladen/verwalten | P0 | PROJ-1, PROJ-2, PROJ-4 | In Progress | [PROJ-11](PROJ-11-team-mitglieder-verwalten.md) | 2026-09-20 |
+| PROJ-11 | Team-Mitglieder einladen/verwalten | P0 | PROJ-1, PROJ-2, PROJ-4 | Approved | [PROJ-11](PROJ-11-team-mitglieder-verwalten.md) | 2026-09-20 |
 
 <!-- Add features above this line -->
 
