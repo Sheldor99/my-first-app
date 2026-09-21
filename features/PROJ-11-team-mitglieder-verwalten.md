@@ -1,6 +1,6 @@
 # PROJ-11: Team-Mitglieder einladen/verwalten
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -89,12 +89,43 @@ _Keine offenen Fragen — im Interview geklärt._
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| E-Mail-Suche läuft über eine geschützte Server-Funktion (nur Owner aufrufbar) statt einer direkten Client-Abfrage | Verhindert, dass die App zur Nutzer-Enumeration missbraucht werden kann; die Funktion gibt nur „gefunden & hinzugefügt" / „nicht gefunden" / „bereits Mitglied" zurück, keine weiteren Profildaten | 2026-09-21 |
+| Letzter-Owner-Schutz wird als Datenbank-Regel durchgesetzt, nicht nur im Frontend geprüft | Garantiert, dass ein Team niemals führungslos wird, unabhängig vom Weg, über den die Aktion ausgelöst wird (UI-Bug, direkter API-Call, etc.) | 2026-09-21 |
+| Team-Löschen nutzt die bestehende RLS-Policy und Cascade-Regeln aus PROJ-1 unverändert | Kein neuer Code nötig — nur die UI dafür kommt hinzu | 2026-09-21 |
+| „Team verwalten" als Dialog vom Team-Switcher aus, kein neuer Seitentyp | Konsistent mit dem bestehenden Dialog-Muster aus PROJ-3, kein neues UI-Konzept nötig | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+Team-Switcher (bestehend, erweitert)
+└── "Team verwalten"-Eintrag (neu, für alle sichtbar)
+
+Team-Verwalten-Dialog (neu)
+├── Mitgliederliste (Tabelle: E-Mail, Rolle)
+│   └── Pro Zeile (nur für Owner sichtbar): Rollen-Auswahl + "Entfernen"-Button
+├── "Mitglied hinzufügen"-Formular (nur für Owner sichtbar: E-Mail-Feld + Button)
+├── "Team verlassen"-Button (für alle Mitglieder, blockiert mit Fehlermeldung falls letzter Owner)
+└── "Team löschen"-Button (nur für Owner; öffnet Bestätigungsdialog mit Warnung vor mitgelöschten Projekten/Aufgaben)
+```
+
+### Data Model (plain language)
+Keine neue Tabelle nötig. `teams` und `team_members` existieren bereits vollständig seit PROJ-1. Zwei neue Automatismen kommen hinzu:
+
+- **Geschützte Suchfunktion:** Prüft bei Eingabe einer E-Mail durch den Owner, ob eine registrierte Person existiert, und fügt sie bei Erfolg direkt hinzu. Gibt nur „gefunden & hinzugefügt", „nicht gefunden" oder „bereits Mitglied" zurück.
+- **Schutzregel in der Datenbank:** Prüft vor jedem Verlassen/Entfernen/Zurückstufen eines Owners automatisch, ob danach noch mindestens ein Owner übrig bleibt, und lehnt die Aktion sonst ab.
+
+### Tech Decisions
+- E-Mail-Suche läuft über eine geschützte Server-Funktion statt einer direkten Datenbankabfrage: verhindert Nutzer-Enumeration.
+- Letzter-Owner-Schutz wird direkt in der Datenbank durchgesetzt, nicht nur in der Oberfläche.
+- Team-Löschen nutzt die bereits vorhandene Lösch-Berechtigung und automatische Mitlöschung aus PROJ-1.
+- Kein neues UI-Muster: „Team verwalten" wird ein Dialog vom Team-Switcher aus, analog zu PROJ-3.
+
+### Dependencies
+Keine neuen npm-Pakete — alle benötigten UI-Bausteine (Tabelle, Auswahlfeld, Dialoge) sind bereits installiert.
 
 ## QA Test Results
 _To be added by /qa_
