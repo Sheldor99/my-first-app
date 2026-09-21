@@ -1,6 +1,6 @@
 # PROJ-4: Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -241,10 +241,10 @@ Keine neuen npm-Pakete — nur eine neue Datenbanktabelle (`profiles`) kommt hin
 
 ### Summary
 - **Acceptance Criteria:** 15/15 vollständig bestanden
-- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low)
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low) — **zurückgestellt** auf Nutzerentscheidung, kein Blocker
 - **Security:** Keine Sicherheitslücken gefunden — RLS-Isolation für Aufgaben und Profile unter echtem Red-Team-Beschuss vollständig standhaft; XSS blockiert
 - **Production Ready:** YES
-- **Recommendation:** Freigegeben. BUG-1 (Low) optional beheben, sobald PROJ-11 den „Mitglied verlässt Team"-Fall real einführt — bis dahin kein praktischer Anwendungsfall.
+- **Recommendation:** Freigegeben. BUG-1 (Low) bewusst zurückgestellt, bis PROJ-11 den „Mitglied verlässt Team"-Fall real einführt — bis dahin kein praktischer Anwendungsfall.
 
 ## Deployment
 _To be added by /deploy_
