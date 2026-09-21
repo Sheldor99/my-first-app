@@ -91,12 +91,50 @@ _Keine offenen Fragen — im Interview geklärt._
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Kein eigenes Backend/API für Team-/Projekt-Verwaltung | Supabase-Client greift direkt auf `teams`/`team_members`/`projects` zu, abgesichert durch die bestehende RLS aus PROJ-1; keine zusätzliche Schicht nötig | 2026-09-21 |
+| "Aktives Team" wird nur im Browser (localStorage) gespeichert, nicht in der Datenbank | Reine Anzeige-Präferenz ohne geschäftliche Relevanz; vermeidet unnötige Datenbank-Komplexität | 2026-09-21 |
+| Keine neuen npm-Pakete nötig | Alle benötigten shadcn/ui-Bausteine (Dialog, DropdownMenu, Select, AlertDialog) sowie react-hook-form/Zod sind bereits installiert | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+/ (Startseite, eingeloggter Bereich)
+├── Team-Auswahl (Dropdown)
+│   ├── Liste der Teams, in denen der Nutzer Mitglied ist
+│   └── "+ Neues Team erstellen"-Option
+│
+├── Kein-Team-Zustand (statt Projektliste, wenn Nutzer noch in keinem Team ist)
+│   └── "Team erstellen"-Formular (nur Name)
+│
+├── Projekt-Übersicht (für das aktuell ausgewählte Team)
+│   ├── Empty State ("Noch keine Projekte" + "Erstes Projekt anlegen"-Button)
+│   ├── Projekt-Karten (je Projekt: Name, Beschreibung, ⋮-Menü)
+│   │   └── ⋮-Menü → Bearbeiten / Löschen
+│   └── "+ Neues Projekt"-Button
+│
+├── Team-Erstellen-Dialog (Formular: Name) — wiederverwendet für Onboarding UND "Neues Team erstellen"
+├── Projekt-Erstellen-Dialog (Formular: Name, Beschreibung)
+├── Projekt-Bearbeiten-Dialog (wie oben, vorausgefüllt)
+└── Lösch-Bestätigungsdialog (Warnhinweis: "Projekt und alle Aufgaben werden unwiderruflich gelöscht")
+```
+
+### Data Model (plain language)
+Keine neue Datenbanktabelle nötig. Die Tabellen `teams`, `team_members` und `projects` samt Zugriffsregeln existieren bereits vollständig seit PROJ-1. PROJ-3 baut ausschließlich die Oberfläche und Verbindungslogik darauf auf.
+
+Einzige neue "Information": Welches Team gerade aktiv ist — das wird nur im Browser des Nutzers gemerkt (nicht in der Datenbank), ähnlich wie eine zuletzt gewählte Einstellung.
+
+### Tech Decisions
+- Kein eigenes Backend/API nötig: Team- und Projekt-Verwaltung läuft direkt über den bereits vorhandenen Supabase-Client — abgesichert durch die Datenbank-Zugriffsregeln aus PROJ-1.
+- "Aktives Team" wird nur im Browser gespeichert, nicht in der Datenbank: reine Anzeige-Präferenz. Beim ersten Besuch wird automatisch das erste Team ausgewählt.
+- Formulare mit react-hook-form + Zod: konsistent mit PROJ-2.
+- Alle benötigten UI-Bausteine (Dialoge, Dropdown-Menü, Auswahlfeld, Bestätigungsdialog) sind bereits installiert.
+
+### Dependencies
+Keine neuen Pakete — alles Notwendige ist bereits im Projekt vorhanden.
 
 ## QA Test Results
 _To be added by /qa_
