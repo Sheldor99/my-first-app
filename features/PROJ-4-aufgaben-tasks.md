@@ -1,6 +1,6 @@
 # PROJ-4: Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum
 
-## Status: In Progress
+## Status: In Review
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -171,7 +171,80 @@ Keine neuen npm-Pakete — nur eine neue Datenbanktabelle (`profiles`) kommt hin
 - 9 neue Vitest-Unit-Tests für `task.ts` (Grenzwerte bei 200/1000 Zeichen, UUID-Validierung für `assignee_id`, optionales `null`). Zusammen mit den bestehenden Tests: **33/33 grün**.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-21
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### Aufgabenliste anzeigen
+- [x] Projekt ohne Aufgaben → Empty State mit „Erste Aufgabe anlegen"-Button
+- [x] Mehrere Aufgaben → korrekt gruppiert nach Status, innerhalb der Gruppe nach Fälligkeitsdatum sortiert (undatierte zuletzt) — verifiziert mit drei Aufgaben (überfällig/zukünftig/ohne Datum) in derselben Status-Gruppe
+- [x] Überfälliges Datum (Status ≠ Done) → rot hervorgehoben; verschwindet korrekt sobald Status auf „Done" gesetzt wird, obwohl das Datum weiterhin in der Vergangenheit liegt
+
+#### Aufgabe anlegen
+- [x] Gültiger Titel (+ optional Beschreibung/Zuweisung/Fälligkeitsdatum) → Aufgabe erstellt mit Status „To Do", erscheint sofort in der Liste
+- [x] Leeres Titelfeld → Validierungsfehler
+- [x] Titel > 200 Zeichen bzw. Beschreibung > 1000 Zeichen → jeweils eigener Validierungsfehler (beide gleichzeitig getestet)
+- [x] Zuweisungs-Auswahl zeigt ausschließlich Mitglieder des aktuellen Teams (verifiziert mit zwei Mitgliedern: beide erscheinen, kein Außenstehender)
+
+#### Aufgabe bearbeiten
+- [x] Gültige Änderung an Titel/Beschreibung/Zuweisung/Fälligkeitsdatum → übernommen, sofort sichtbar
+- [x] Titelfeld beim Bearbeiten geleert → Validierungsfehler, Dialog bleibt offen
+
+#### Status ändern
+- [x] Status-Dropdown-Änderung → Aufgabe erscheint sofort in der richtigen Status-Gruppe (To Do → In Progress → Done getestet)
+
+#### Aufgabe löschen
+- [x] Klick auf „Löschen" → Bestätigungsdialog
+- [x] Bestätigung → Aufgabe entfernt
+- [x] Abbrechen → Aufgabe bleibt unverändert erhalten
+
+#### Zuweisung
+- [x] Zugewiesene Person wird in der Liste sichtbar angezeigt
+- [x] Zuweisung entfernen (auf „Niemand" setzen) → zeigt keine Person mehr
+
+### Edge Cases Status
+- [x] Verwaistes Zuweisung (Mitglied wird per SQL aus dem Team entfernt, simuliert künftiges PROJ-11) → **kein Absturz**, Anzeige fällt sauber auf „Niemand zugewiesen" zurück; `assignee_id` bleibt in der DB unverändert erhalten (kein Datenverlust) — siehe BUG-1 für eine kleine Abweichung von der in der Spec vorgeschlagenen Formulierung
+- [x] Fälligkeitsdatum in der Vergangenheit beim Anlegen → wird zugelassen, keine Blockade
+- [ ] Nicht explizit getestet: Netzwerkfehler beim Absenden, Doppel-Klick-Schutz, sehr viele Aufgaben/Pagination (Code-Review zeigt entsprechende Absicherung — `isSubmitting`-Deaktivierung, Catch-All-Fehlerbehandlung — aber kein Lasttest durchgeführt)
+
+### Security Audit Results (Red Team, mit drei echten Usern: Owner/Member/Outsider, echte API-Calls mit gültigem Token)
+- [x] Direkter `SELECT` auf Aufgaben eines fremden Projekts → `200 OK`, leeres Array
+- [x] Direkter `INSERT` einer Aufgabe in ein fremdes Projekt → `403`, RLS blockiert
+- [x] Direkter `UPDATE`/`DELETE` auf fremde Aufgaben → Request „erfolgreich" (200), aber 0 Zeilen betroffen — per SQL verifiziert, dass beide Aufgaben unverändert und vorhanden blieben
+- [x] `profiles`-Sichtbarkeit für Outsider (keine gemeinsame Team-Mitgliedschaft) → sieht per direktem API-Call nur das eigene Profil, weder Owner noch Member sichtbar
+- [x] XSS-Versuch (`<img src=x onerror=...>`) im Aufgabentitel → als inerter Text gerendert, keine Skriptausführung
+- [x] Direkter URL-Aufruf der fremden Projekt-Detailseite als Outsider → „Projekt nicht gefunden oder kein Zugriff"
+
+### Regressionstest
+- [x] PROJ-3 (Projekt-CRUD, Team-Switcher) weiterhin voll funktionsfähig — durchgängig für die gesamte Testsitzung genutzt
+- [x] PROJ-2-Routenschutz weiterhin intakt (Login/Logout, Zugriffsschutz)
+
+### Bugs Found
+
+#### BUG-1: Verwaiste Zuweisung zeigt „Niemand zugewiesen" statt der in der Spec vorgeschlagenen Kennzeichnung
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Aufgabe einem Team-Mitglied zuweisen
+  2. Mitglied wird aus dem Team entfernt (Funktion kommt erst mit PROJ-11, hier per SQL simuliert)
+  3. Aufgaben-Detailseite neu laden
+  4. Erwartet (lt. Edge-Case-Beschreibung in der Spec): eine erkennbare Kennzeichnung wie „Ehemaliges Mitglied" statt eines irreführenden Zustands
+  5. Tatsächlich: Anzeige zeigt „Niemand zugewiesen" — technisch korrekt (kein Absturz, kein Datenverlust, `assignee_id` bleibt in der DB gesetzt), aber semantisch leicht irreführend, da die Aufgabe weiterhin einer (nicht mehr sichtbaren) Person zugewiesen ist, nicht wirklich „niemandem"
+- **Priority:** Nice to have — die AC-Kernanforderung „ohne abzustürzen" ist erfüllt; betrifft nur einen Edge Case, der ohnehin erst mit PROJ-11 real eintreten kann
+- **Hinweis (kein Fix durch QA):** Da `assignee_id` gesetzt aber das zugehörige Profil für den Betrachter nicht auflösbar ist, könnte die Karte zwischen „kein Assignee" (`assignee_id === null`) und „Assignee nicht auflösbar" (`assignee_id` gesetzt, aber kein passendes Profil in `members`) unterscheiden und im zweiten Fall „Ehemaliges Mitglied" anzeigen.
+
+### Automatisierte Tests (Zusammenfassung)
+- **Unit-Tests (Vitest):** 33/33 grün (inkl. 9 neuer Tests für das Task-Schema).
+- **E2E-Tests (Playwright):** Nicht ausgeführt — Playwright-Browser-Installation in dieser Entwicklungsumgebung weiterhin nicht abschließbar (bekanntes Problem, bereits bei PROJ-2/PROJ-3 aufgetreten). Keine neue Spec-Datei geschrieben, da fast die gesamte PROJ-4-Funktionalität eine Session voraussetzt (siehe PROJ-3-QA-Bericht für die ausführlichere Begründung).
+
+### Summary
+- **Acceptance Criteria:** 15/15 vollständig bestanden
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low)
+- **Security:** Keine Sicherheitslücken gefunden — RLS-Isolation für Aufgaben und Profile unter echtem Red-Team-Beschuss vollständig standhaft; XSS blockiert
+- **Production Ready:** YES
+- **Recommendation:** Freigegeben. BUG-1 (Low) optional beheben, sobald PROJ-11 den „Mitglied verlässt Team"-Fall real einführt — bis dahin kein praktischer Anwendungsfall.
 
 ## Deployment
 _To be added by /deploy_
