@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { teamSchema } from "./team"
+import { addTeamMemberSchema, teamSchema } from "./team"
 
 describe("teamSchema", () => {
   it("accepts a valid team name", () => {
@@ -16,5 +16,19 @@ describe("teamSchema", () => {
 
   it("accepts a name exactly 100 characters long", () => {
     expect(teamSchema.safeParse({ name: "a".repeat(100) }).success).toBe(true)
+  })
+})
+
+describe("addTeamMemberSchema", () => {
+  it("accepts a valid email", () => {
+    expect(addTeamMemberSchema.safeParse({ email: "person@example.com" }).success).toBe(true)
+  })
+
+  it("rejects an empty email", () => {
+    expect(addTeamMemberSchema.safeParse({ email: "" }).success).toBe(false)
+  })
+
+  it("rejects an invalid email format", () => {
+    expect(addTeamMemberSchema.safeParse({ email: "not-an-email" }).success).toBe(false)
   })
 })

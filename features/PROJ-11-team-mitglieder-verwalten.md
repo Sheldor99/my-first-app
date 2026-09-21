@@ -147,6 +147,30 @@ Keine neue Tabelle. Zwei Migrationen auf `teams`/`team_members` (bestehend seit 
 - Team-Löschung cascade-entfernt alle Mitgliedschaften inkl. des einzigen Owners → erfolgreich (nach Fix) ✓
 - `mcp__supabase__get_advisors` (security) geprüft: keine neuen Findings außer den erwarteten/beabsichtigten (RPC-Aufrufbarkeit von `add_team_member_by_email` für `authenticated`, bewusst so gewollt)
 
+## Frontend Implementation Notes
+
+Kein neues UI-Muster — alles als Erweiterung des bestehenden Team-Switchers/Dialog-Systems aus PROJ-3, ausschließlich mit bereits installierten shadcn/ui-Komponenten (Dialog, AlertDialog, Table, Select, Form, Button, Separator, Skeleton).
+
+- **`use-team-members.ts` (erweitert):** liefert jetzt zusätzlich `role` pro Mitglied und eine `refetchMembers()`-Funktion. Bestehende Konsumenten (`task-list.tsx`, `task-form-dialog.tsx`, `task-card.tsx`), die nur `id`/`email` nutzen, bleiben unverändert kompatibel.
+- **`validations/team.ts`:** neues `addTeamMemberSchema` (E-Mail-Pflichtfeld mit Format-Validierung) inkl. Tests.
+- **`add-member-form.tsx`:** react-hook-form + Zod, ruft `add_team_member_by_email` per `supabase.rpc(...)` auf und übersetzt `not_found`/`already_member`/`added` in die im Spec vorgegebenen Fehlermeldungen.
+- **`remove-member-dialog.tsx`:** ein AlertDialog für beide Fälle „Mitglied entfernen" (Owner entfernt jemand anderen) und „Team verlassen" (Selbst-Entfernen), Text passt sich über `isSelf` an. Beide Wege lösen serverseitig denselben Löschvorgang aus und werden vom Last-Owner-Trigger identisch geschützt.
+- **`delete-team-dialog.tsx`:** AlertDialog analog zu `delete-project-dialog.tsx`, mit Warnung vor kaskadierendem Löschen von Projekten/Aufgaben/Mitgliedschaften.
+- **`manage-team-dialog.tsx`:** Haupt-Dialog — Mitgliedertabelle (E-Mail, Rolle, Aktion), Rollen-Select direkt inline (nur für Owner), „Mitglied hinzufügen"-Formular (nur für Owner), „Team verlassen"- und „Team löschen"-Buttons. Ermittelt Owner-Status clientseitig aus der eigenen `user_id` in der Mitgliederliste, um Aktionen ein-/auszublenden — die eigentliche Berechtigungsprüfung bleibt serverseitig (RLS/Backend-Funktion).
+- **`team-switcher.tsx`:** neuer „Team verwalten"-Menüpunkt (für alle Mitglieder sichtbar), öffnet den neuen Dialog; neue `onTeamsChanged`-Prop, die nach Team-Verlassen/-Löschen `refetchTeams()` auslöst (bestehende Fallback-Logik in `useTeams` wählt danach automatisch ein gültiges Team oder zeigt den Leer-Zustand).
+
+**Bekannte Tooling-Lücke (nicht Teil dieser Feature-Arbeit):** `npm run lint` schlägt fehl, da Next.js 16 den eingebauten `next lint`-Befehl entfernt hat und die ESLint-9-Flat-Config-Migration für dieses Projekt noch nicht durchgeführt wurde. Stattdessen wurde `npm run build` (inkl. TypeScript-Check) und `npm test` zur Verifikation genutzt.
+
+**Manuelle Verifikation im Browser (mit temporären Test-Usern über die echte Signup-/Login-UI erstellt, anschließend vollständig aufgeräumt):**
+- Mitgliederliste + Rollen-Anzeige korrekt, Owner-Aktionen nur für Owner sichtbar ✓
+- Mitglied per E-Mail hinzufügen → sofort in Liste ✓
+- Doppeltes Hinzufügen derselben E-Mail → „Diese Person ist bereits Mitglied" ✓
+- Hinzufügen unbekannter E-Mail → „Diese Person muss sich zuerst registrieren" ✓
+- Alleiniger Owner versucht eigene Rolle zu ändern → Fehler-Toast, Rolle bleibt „Owner" ✓
+- Alleiniger Owner versucht „Team verlassen" → Bestätigungsdialog, dann Fehler-Toast, Dialog bleibt nutzbar ✓
+- Owner entfernt ein Mitglied über „Entfernen" (mit Bestätigungsdialog) → erfolgreich ✓
+- Owner löscht das Team (mit Bestätigungsdialog) → Team inkl. eigener Mitgliedschaft gelöscht, UI fällt korrekt auf den Team-erstellen-Leerzustand zurück ✓
+
 ## QA Test Results
 _To be added by /qa_
 

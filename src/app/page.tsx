@@ -74,6 +74,7 @@ export default function Home() {
               activeTeamId={activeTeamId}
               onSelectTeam={setActiveTeamId}
               onTeamCreated={() => refetchTeams()}
+              onTeamsChanged={() => refetchTeams()}
             />
           )}
         </div>

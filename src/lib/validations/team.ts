@@ -8,3 +8,9 @@ export const teamSchema = z.object({
 })
 
 export type TeamInput = z.infer<typeof teamSchema>
+
+export const addTeamMemberSchema = z.object({
+  email: z.string().min(1, 'E-Mail ist erforderlich').email('Ungültige E-Mail-Adresse'),
+})
+
+export type AddTeamMemberInput = z.infer<typeof addTeamMemberSchema>
