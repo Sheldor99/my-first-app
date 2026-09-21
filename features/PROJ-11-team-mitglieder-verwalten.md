@@ -1,6 +1,6 @@
 # PROJ-11: Team-Mitglieder einladen/verwalten
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -126,6 +126,26 @@ Keine neue Tabelle nötig. `teams` und `team_members` existieren bereits vollst�
 
 ### Dependencies
 Keine neuen npm-Pakete — alle benötigten UI-Bausteine (Tabelle, Auswahlfeld, Dialoge) sind bereits installiert.
+
+## Backend Implementation Notes
+
+Keine neue Tabelle. Zwei Migrationen auf `teams`/`team_members` (bestehend seit PROJ-1) aufgesetzt:
+
+- **`add_team_member_by_email(target_team_id, member_email)`** — SECURITY DEFINER-Funktion. Prüft zuerst `is_team_owner(target_team_id)` (sonst Exception „not authorized"), sucht dann per E-Mail in `profiles` (bypassed RLS gezielt, da ein Owner ohne diese Funktion keine fremden Profile sehen dürfte) und gibt `'not_found'`, `'already_member'` oder `'added'` zurück (Insert in `team_members` mit `role = 'member'` im letzten Fall). `EXECUTE` nur für `authenticated`, nicht für `anon` — ein anonymer Aufruf bekommt sauber die Autorisierungs-Exception vom internen `is_team_owner`-Check, kein RLS-Fehlverhalten wie bei PROJ-1 BUG-2.
+- **`prevent_last_owner_removal()`** — Trigger-Funktion (`BEFORE UPDATE OR DELETE ON team_members`), setzt die Datenbank-Regel durch: Der letzte verbleibende Owner eines Teams kann weder entfernt noch auf „member" zurückgestuft werden. `EXECUTE` von `public`/`anon`/`authenticated` entzogen (nur intern vom Trigger aufgerufen, analog zu `handle_new_user`).
+- **Nachträglicher Fix während der Verifikation:** Die erste Version der Trigger-Funktion blockierte auch das erwartete Cascade-Delete beim Löschen eines ganzen Teams (Team-Löschen würde sonst am eigenen letzten-Owner-Schutz scheitern). Fix: Die Funktion prüft jetzt zuerst, ob das Team selbst noch existiert (`not exists (select 1 from teams where id = OLD.team_id)`) — falls nicht, ist der Löschvorgang Teil eines Team-Deletes und wird durchgelassen.
+- Team-Löschen selbst benötigt keinen neuen Code — läuft vollständig über die bestehende RLS-Policy „Owners can delete their team" und die vorhandenen `ON DELETE CASCADE`-Regeln aus PROJ-1.
+
+**Verifikation (simulierte Sessions via `SET LOCAL request.jwt.claims`, mit temporären Test-Usern, anschließend vollständig aufgeräumt):**
+- Owner fügt registrierte Person per E-Mail hinzu → `'added'` ✓
+- Erneutes Hinzufügen derselben Person → `'already_member'` ✓
+- Hinzufügen einer nicht registrierten E-Mail → `'not_found'` ✓
+- Nicht-Owner versucht hinzuzufügen → Exception „not authorized" ✓
+- Alleiniger Owner versucht sich selbst zu entfernen → blockiert ✓
+- Alleiniger Owner versucht eigene Rolle auf „member" zu ändern → blockiert ✓
+- Mit zweitem Owner im Team: ursprünglicher Owner kann sich entfernen → erfolgreich ✓
+- Team-Löschung cascade-entfernt alle Mitgliedschaften inkl. des einzigen Owners → erfolgreich (nach Fix) ✓
+- `mcp__supabase__get_advisors` (security) geprüft: keine neuen Findings außer den erwarteten/beabsichtigten (RPC-Aufrufbarkeit von `add_team_member_by_email` für `authenticated`, bewusst so gewollt)
 
 ## QA Test Results
 _To be added by /qa_
