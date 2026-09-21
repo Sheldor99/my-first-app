@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { MoreVertical } from "lucide-react"
 
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -23,7 +24,11 @@ export function ProjectCard({ project, onEdit, onDelete }: ProjectCardProps) {
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
         <div className="space-y-1.5">
-          <CardTitle>{project.name}</CardTitle>
+          <CardTitle>
+            <Link href={`/projects/${project.id}`} className="hover:underline">
+              {project.name}
+            </Link>
+          </CardTitle>
           {project.description && (
             <CardDescription>{project.description}</CardDescription>
           )}

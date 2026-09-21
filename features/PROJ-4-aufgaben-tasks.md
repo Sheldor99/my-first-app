@@ -146,6 +146,30 @@ Keine neuen npm-Pakete — nur eine neue Datenbanktabelle (`profiles`) kommt hin
 ### Noch offen (folgt in `/frontend`)
 - Kein Task-CRUD, keine Projekt-Detailseite, kein Zuweisungs-UI gebaut — laut Tech Design läuft das direkt über den Supabase-Client ohne eigenes API-Backend, analog zu PROJ-3.
 
+## Implementation Notes (Frontend Developer)
+
+- `src/lib/validations/task.ts`: Zod-Schema (Titel Pflicht max. 200 Zeichen, Beschreibung optional max. 1000 Zeichen, `assignee_id` optionale UUID, `due_date` optionaler String).
+- `src/hooks/use-team-members.ts`: Lädt Team-Mitglieder für die Zuweisungs-Auswahl über zwei einfache Abfragen (`team_members` → Liste der `user_id`s, dann `profiles` gefiltert per `.in()`) statt eines PostgREST-Embeds — `team_members` und `profiles` haben keine direkte Fremdschlüsselbeziehung zueinander (beide referenzieren nur `auth.users`), ein Embed wäre also nicht automatisch auflösbar gewesen.
+- `src/app/projects/[id]/page.tsx`: Neue Projekt-Detailseite (Client Component, `useParams()`). Lädt das Projekt per `.maybeSingle()`; liefert die RLS aus PROJ-1 kein Ergebnis (falsche ID oder kein Zugriff), wird „Projekt nicht gefunden oder kein Zugriff" angezeigt statt eines Absturzes.
+- `src/components/tasks/task-list.tsx`: Lädt Aufgaben fürs Projekt, gruppiert clientseitig nach Status (`todo`/`in_progress`/`done`), sortiert je Gruppe nach Fälligkeitsdatum (undatierte zuletzt), zeigt Empty State oder die drei Status-Abschnitte.
+- `src/components/tasks/task-card.tsx`: Zeigt Titel, Zuweisung (E-Mail), Fälligkeitsdatum (rot + fett hervorgehoben, wenn überfällig **und** Status ≠ „Done"), Status-Dropdown für Schnellwechsel direkt in der Karte, ⋮-Menü für Bearbeiten/Löschen.
+- `src/components/tasks/task-form-dialog.tsx`: Ein Dialog für Anlegen UND Bearbeiten (wie bei Projekten in PROJ-3), inkl. Zuweisungs-`Select` (befüllt über `useTeamMembers`) und nativem `<input type="date">` fürs Fälligkeitsdatum.
+- `src/components/tasks/delete-task-dialog.tsx`: Einfacher Bestätigungsdialog (kein Cascade-Hinweis nötig, da Aufgaben keine Kind-Entitäten haben).
+- `src/components/projects/project-card.tsx`: Projekt-Titel ist jetzt ein Link zu `/projects/[id]` (⋮-Menü mit Bearbeiten/Löschen-Dialogen aus PROJ-3 bleibt unverändert für die Projekt-Metadaten selbst).
+
+### Manuelles Testen (Browser, echtes Supabase-Projekt)
+- Team + Projekt erstellt, per Klick auf den Projekt-Titel korrekt zur neuen Detailseite navigiert.
+- Aufgabe mit Titel, Zuweisung (einzig verfügbares Team-Mitglied wurde korrekt in der Auswahl angezeigt) und überfälligem Datum (01.01.2020) angelegt → erscheint sofort unter „To Do (1)", Fälligkeitsdatum rot hervorgehoben.
+- Status per Dropdown auf „In Progress" geändert → Aufgabe wandert sofort in die richtige Gruppe.
+- Status auf „Done" geändert → Überfällig-Hervorhebung verschwindet korrekt (Datum wieder normal dargestellt), obwohl das Datum weiterhin in der Vergangenheit liegt — bestätigt die Spec-Regel „nur wenn Status ≠ Done".
+- Aufgabe über ⋮-Menü gelöscht → Bestätigungsdialog, nach Bestätigung verschwindet die Aufgabe, Empty State erscheint wieder.
+- Leeres Titelfeld beim Anlegen → Validierungsfehler „Titel ist erforderlich".
+- Direkter Aufruf von `/projects/<ungültige-id>` → „Projekt nicht gefunden oder kein Zugriff" statt Absturz.
+- Alle Test-Daten (Team, Projekt, Aufgabe, Nutzer) nach Testende vollständig entfernt.
+
+### Automatisierte Tests
+- 9 neue Vitest-Unit-Tests für `task.ts` (Grenzwerte bei 200/1000 Zeichen, UUID-Validierung für `assignee_id`, optionales `null`). Zusammen mit den bestehenden Tests: **33/33 grün**.
+
 ## QA Test Results
 _To be added by /qa_
 
