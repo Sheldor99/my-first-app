@@ -19,7 +19,7 @@
 | PROJ-2 | Login/Signup (Auth) | P0 | PROJ-1 | Deployed | [PROJ-2](PROJ-2-login-signup.md) | 2026-09-18 |
 | PROJ-3 | Projekte anlegen/verwalten | P0 | PROJ-1, PROJ-2 | Deployed | [PROJ-3](PROJ-3-projekte-anlegen-verwalten.md) | 2026-09-18 |
 | PROJ-4 | Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum | P0 | PROJ-1, PROJ-3 | Deployed | [PROJ-4](PROJ-4-aufgaben-tasks.md) | 2026-09-18 |
-| PROJ-5 | Kanban-Board-Ansicht pro Projekt | P0 | PROJ-1, PROJ-4 | Planned | [PROJ-5](PROJ-5-kanban-board-ansicht.md) | 2026-09-18 |
+| PROJ-5 | Kanban-Board-Ansicht pro Projekt | P0 | PROJ-1, PROJ-4 | Architected | [PROJ-5](PROJ-5-kanban-board-ansicht.md) | 2026-09-18 |
 | PROJ-6 | Kommentare zu Aufgaben | P1 | PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-7 | Dateianhänge an Aufgaben | P1 | PROJ-1, PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-8 | Zeiterfassung | P2 | PROJ-4 | Roadmap | - | 2026-09-18 |

@@ -1,6 +1,6 @@
 # PROJ-5: Kanban-Board-Ansicht pro Projekt
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -79,12 +79,42 @@ _Keine offenen Fragen — im Interview geklärt._
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| `@dnd-kit/core` + `@dnd-kit/sortable` für Drag & Drop statt Eigenbau oder `react-beautiful-dnd` | Aktiv gepflegt (im Gegensatz zu `react-beautiful-dnd`, das als deprecated gilt), eingebaute Touch- und Tastatur-Unterstützung deckt die Edge Cases „Touch-Gerät" und Barrierefreiheit ohne Zusatzaufwand ab | 2026-09-21 |
+| Drop-Handler ruft denselben Update-Call auf, den `TaskCard`s bestehende Status-Auswahl bereits nutzt | Kein zweiter Code-Pfad für dieselbe Aktion (Status ändern); Karte wird lokal sofort verschoben (optimistisch) und bei einem Fehler des Updates zurückgesetzt | 2026-09-21 |
+| Bestehende `ScrollArea`-Komponente (shadcn/ui) für horizontales Board-Scrollen und vertikales Spalten-Scrollen, kein neues Scroll-Paket | Component bereits installiert und im Projekt etabliert; vermeidet ein zusätzliches Abhängigkeit für dieselbe Aufgabe | 2026-09-21 |
+| Kein neuer Backend-Code oder neue RLS-Policy | Drag & Drop löst denselben `UPDATE`-Aufruf auf `tasks.status` aus, der bereits durch die RLS-Policies aus PROJ-1/PROJ-4 abgesichert ist | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+Projekt-Detailseite
+└── Kanban-Board (ersetzt die bisherige Aufgaben-Liste aus PROJ-4)
+    ├── "Neue Aufgabe"-Button (oben, global — unverändert aus PROJ-4)
+    ├── Spalte "To Do" (Überschrift zeigt Anzahl)
+    │   └── Aufgaben-Karten (ziehbar, bestehende TaskCard-Optik + Status-Auswahl als Fallback)
+    ├── Spalte "In Progress"
+    │   └── Aufgaben-Karten (ziehbar)
+    ├── Spalte "Done"
+    │   └── Aufgaben-Karten (ziehbar)
+    └── Leer-Zustand (ersetzt das gesamte Board, wenn das Projekt 0 Aufgaben hat — unverändert aus PROJ-4)
+```
+Auf schmalen Bildschirmen scrollt die Reihe der drei Spalten horizontal; jede einzelne Spalte scrollt bei vielen Karten zusätzlich vertikal innerhalb ihres eigenen Bereichs.
+
+### Data Model (plain language)
+Keine neue Tabelle, kein neues Feld. Die bereits vorhandene `status`-Spalte einer Aufgabe (aus PROJ-4) bleibt die einzige Quelle der Wahrheit — eine Karte in eine andere Spalte zu ziehen ist exakt dieselbe Aktion wie heute schon die Status-Auswahl auf der Karte zu benutzen, nur über Ziehen statt über ein Menü ausgelöst. Die Reihenfolge innerhalb einer Spalte wird nie gespeichert, sondern beim Anzeigen automatisch nach Fälligkeitsdatum berechnet (wie bisher).
+
+### Tech Decisions
+- Drag-and-drop läuft über eine kleine, spezialisierte Zusatzbibliothek statt selbstgebauter Logik — sie kümmert sich um die „Physik" des Ziehens (Mausverfolgung, Touch-Gesten, Loslassen erkennen) und unterstützt von Haus aus auch Tablets und Tastaturbedienung.
+- Optimistisches Verschieben nutzt denselben Speicherweg wie die bestehende Status-Auswahl — die Karte springt beim Ziehen sofort in die neue Spalte, im Hintergrund läuft derselbe Speichervorgang wie bei einem Dropdown-Wechsel; schlägt er fehl, springt die Karte zurück und eine Fehlermeldung erscheint.
+- Horizontales/vertikales Scrollen nutzt einen bereits im Projekt vorhandenen UI-Baustein — kein neues Paket nötig, nur eine neue Anordnung der Spalten nebeneinander statt untereinander.
+- Kein Backend-Bedarf — reine Frontend-Änderung; die Berechtigungsprüfung, wer eine Aufgabe verschieben darf, existiert bereits vollständig aus PROJ-4/PROJ-1 und wird unverändert wiederverwendet.
+
+### Dependencies
+- `@dnd-kit/core` + `@dnd-kit/sortable` — Drag-and-Drop-Interaktion und Spalten-/Drop-Zonen-Erkennung. Keine weiteren neuen Pakete: alle UI-Bausteine (Karten, Scrollbereiche, Buttons) sind bereits installiert.
 
 ## QA Test Results
 _To be added by /qa_
