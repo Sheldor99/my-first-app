@@ -14,7 +14,7 @@ Kleine Software-/Kreativ-Agenturteams (3–10 Personen), die mehrere Kundenproje
 | P0 (MVP) | Login/Signup (Auth) | Deployed |
 | P0 (MVP) | Projekte anlegen/verwalten | Planned |
 | P0 (MVP) | Team-Mitglieder einladen/verwalten | Roadmap |
-| P0 (MVP) | Aufgaben (Tasks) mit Status, Zuweisung, Fälligkeitsdatum | Roadmap |
+| P0 (MVP) | Aufgaben (Tasks) mit Status, Zuweisung, Fälligkeitsdatum | Planned |
 | P0 (MVP) | Kanban-Board-Ansicht pro Projekt | Roadmap |
 | P1 | Kommentare zu Aufgaben | Roadmap |
 | P1 | Dateianhänge an Aufgaben | Roadmap |
