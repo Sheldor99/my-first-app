@@ -1,6 +1,6 @@
 # PROJ-3: Projekte anlegen/verwalten
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -135,6 +135,29 @@ Einzige neue "Information": Welches Team gerade aktiv ist — das wird nur im Br
 
 ### Dependencies
 Keine neuen Pakete — alles Notwendige ist bereits im Projekt vorhanden.
+
+## Implementation Notes (Frontend Developer)
+
+- `src/lib/validations/team.ts`, `src/lib/validations/project.ts`: Zod-Schemas (Team-Name max. 100 Zeichen; Projektname max. 100, Beschreibung optional max. 500 Zeichen).
+- `src/hooks/use-teams.ts`: Lädt die Teams des eingeloggten Nutzers (RLS filtert automatisch auf Mitgliedschaften), verwaltet das aktive Team inkl. Persistierung in `localStorage` (Fallback auf das erste Team, falls der gespeicherte Wert ungültig/leer ist).
+- `src/components/teams/create-team-form.tsx`: Die eigentliche Team-Erstellen-Formularlogik, wiederverwendet sowohl im Onboarding (inline auf der Startseite, kein Dialog) als auch im `TeamFormDialog` (für "Neues Team erstellen" über den Switcher) — vermeidet Duplizierung.
+- `src/components/teams/team-switcher.tsx`: Dropdown mit allen Teams des Nutzers + "Neues Team erstellen"-Eintrag; neu erstelltes Team wird sofort aktiv.
+- `src/components/projects/project-list.tsx`: Lädt Projekte für das aktive Team, zeigt Empty State oder Grid aus `ProjectCard`s, orchestriert Erstellen-/Bearbeiten-/Lösch-Dialoge.
+- `src/components/projects/project-form-dialog.tsx`: Ein Dialog für Anlegen UND Bearbeiten (unterscheidet über optionale `project`-Prop).
+- `src/components/projects/delete-project-dialog.tsx`: AlertDialog mit explizitem Hinweis auf mitgelöschte Aufgaben.
+- `src/app/page.tsx`: komplett neu aufgebaut — Auth-Check (unverändert aus PROJ-2) + Team-Onboarding-Zustand (kein Team) + Header mit Team-Switcher/Logout + Projekt-Übersicht für das aktive Team.
+
+### Manuelles Testen (Browser, echtes Supabase-Projekt)
+Mit einem temporären, per SQL angelegten Test-User (danach vollständig inkl. aller angelegten Teams/Projekte gelöscht) end-to-end durchgespielt:
+- Onboarding-Zustand (kein Team) zeigt korrekt das "Team erstellen"-Formular statt Projektliste
+- Team erstellen → automatisch aktiv, Owner-Trigger aus PROJ-1 greift, Projekt-Übersicht (leer) erscheint
+- Empty State mit "Erstes Projekt anlegen"-CTA korrekt
+- Projekt anlegen (Name + Beschreibung) → erscheint sofort in der Liste
+- Projekt bearbeiten über ⋮-Menü → Dialog vorausgefüllt, Speichern übernimmt Änderung sofort sichtbar
+- Projekt löschen → Bestätigungsdialog mit korrektem Hinweis auf mitgelöschte Aufgaben; „Abbrechen" behält das Projekt, „Löschen" entfernt es
+- Zweites Team über Switcher erstellt → wird sofort aktiv, eigene (leere) Projektliste — Isolation zwischen Teams bestätigt (Projekt aus Team A taucht nicht in Team B auf und umgekehrt)
+- Team-Wechsel über Switcher in beide Richtungen verifiziert
+- Leeres Projektnamen-Feld beim Anlegen → Validierungsfehler „Projektname ist erforderlich", kein Request
 
 ## QA Test Results
 _To be added by /qa_
