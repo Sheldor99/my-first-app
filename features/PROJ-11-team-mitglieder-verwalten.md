@@ -1,6 +1,6 @@
 # PROJ-11: Team-Mitglieder einladen/verwalten
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -257,4 +257,21 @@ Keine Bugs gefunden (Critical/High/Medium/Low: 0/0/0/0).
 - **Recommendation:** Deploy
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-21
+**Art:** Lokaler Produktions-Build (`npm run build` + `npm run start`), bewusst kein Vercel-Deployment (konsistent mit PROJ-1/2/3/4)
+**URL:** http://localhost:3000 (nur lokal erreichbar)
+**Backend:** Supabase-Projekt `my-first-app` — Migrationen `proj11_team_member_management`, `proj11_lock_down_trigger_function` und `proj11_fix_last_owner_trigger_on_team_delete` bereits während `/backend` angewendet und in der QA verifiziert
+
+### Durchgeführte Checks
+- [x] `npm run build` erfolgreich (keine TypeScript-Fehler)
+- [x] Lokaler Produktions-Server (`next start`, testweise auf Port 3010, da 3000/3001 durch laufende Dev-Server belegt waren) startet fehlerfrei, Routenschutz greift korrekt (`/` → 307 Redirect, `/login` → 200)
+- [x] Keine Secrets im Git-Repo (nur `.env.local.example` getrackt, keine neuen Env-Vars für PROJ-11 nötig)
+- [x] Keine neuen Env-Vars nötig (nutzt bestehende Supabase-Client-Konfiguration)
+- [x] QA-Freigabe vorhanden, keine Critical/High-Bugs (siehe QA Test Results oben)
+- [ ] `npm run lint` weiterhin nicht lauffähig — vorbestehendes Problem seit PROJ-1 (Next.js 16 hat `next lint` entfernt, ESLint-9-Flat-Config-Migration steht aus), unverändert, weiterhin zurückgestellt
+
+### Bekannte offene Punkte
+- ESLint-Konfiguration weiterhin nicht repariert
+- Playwright-E2E-Tests weiterhin nicht ausführbar in dieser Umgebung (Browser-Installation schlägt wiederholt fehl, `__dirlock`-Konflikt)
+- Vor einem echten Public-Launch: Vercel-Setup, Error-Tracking, Security-Headers, Lighthouse-Check (weiterhin nicht durchgeführt, da nur lokal deployed)
