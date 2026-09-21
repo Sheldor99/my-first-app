@@ -1,6 +1,6 @@
 # PROJ-2: Login/Signup (Auth)
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-20
 **Last Updated:** 2026-09-20
 
@@ -267,4 +267,22 @@ Für PROJ-2 wird keine neue Datenbanktabelle benötigt. Nutzerkonten (E-Mail, Pa
 - **Recommendation:** Freigegeben. Offene Empfehlungen für später: Reset-Link-Happy-Path einmal real durchklicken sobald das E-Mail-Kontingent zurückgesetzt ist oder ein eigener SMTP-Provider konfiguriert ist; Playwright-E2E-Suite ausführen, sobald die Browser-Installation lokal funktioniert (siehe oben).
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-21
+**Art:** Lokaler Produktions-Build (`npm run build` + `npm run start`), bewusst kein Vercel-Deployment (Nutzerentscheidung, konsistent mit PROJ-1)
+**URL:** http://localhost:3000 (nur lokal erreichbar)
+**Backend:** Supabase-Projekt `my-first-app` — keine neuen Migrationen für PROJ-2 (nutzt vollständig die PROJ-1-Infrastruktur)
+
+### Durchgeführte Checks
+- [x] `npm run build` erfolgreich (keine TypeScript-Fehler)
+- [x] Lokaler Produktions-Server (`next start`) startet und Routenschutz greift korrekt (`/` → Redirect zu `/login` ohne Session)
+- [x] Keine Secrets im Git-Repo (`git ls-files` geprüft — nur `.env.local.example` getrackt)
+- [x] Keine neuen Env-Vars nötig (nutzt dieselben wie PROJ-1)
+- [x] Code committed und bereits vorher nach `origin/main` gepusht
+- [ ] `npm run lint` weiterhin nicht lauffähig — vorbestehendes Problem (Next.js 16 + ESLint 9 ohne `eslint.config.js`), unverändert seit PROJ-1, weiterhin zurückgestellt
+
+### Bekannte offene Punkte für einen späteren echten Launch
+- ESLint-Konfiguration reparieren (`eslint.config.js` fehlt)
+- Passwort-Reset-Link-Happy-Path einmal real durchklicken (E-Mail-Rate-Limit verhinderte dies während QA)
+- Playwright-E2E-Suite (`tests/PROJ-2-login-signup.spec.ts`) einmal erfolgreich ausführen — Browser-Installation in der Entwicklungsumgebung bisher nicht abgeschlossen
+- Vor einem echten Public-Launch: Vercel-Setup, Error-Tracking, Security-Headers, Lighthouse-Check (bisher für kein Feature durchgeführt, da nur lokal deployed)
