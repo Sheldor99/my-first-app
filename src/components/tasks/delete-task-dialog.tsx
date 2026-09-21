@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
-import type { Task } from "@/components/tasks/task-list"
+import type { Task } from "@/components/tasks/task-board"
 
 interface DeleteTaskDialogProps {
   open: boolean

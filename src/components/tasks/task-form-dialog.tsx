@@ -34,7 +34,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import type { Task } from "@/components/tasks/task-list"
+import type { Task } from "@/components/tasks/task-board"
 
 const UNASSIGNED = "unassigned"
 

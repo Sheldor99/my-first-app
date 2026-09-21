@@ -1,6 +1,6 @@
 # PROJ-5: Kanban-Board-Ansicht pro Projekt
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -79,10 +79,11 @@ _Keine offenen Fragen — im Interview geklärt._
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
-| `@dnd-kit/core` + `@dnd-kit/sortable` für Drag & Drop statt Eigenbau oder `react-beautiful-dnd` | Aktiv gepflegt (im Gegensatz zu `react-beautiful-dnd`, das als deprecated gilt), eingebaute Touch- und Tastatur-Unterstützung deckt die Edge Cases „Touch-Gerät" und Barrierefreiheit ohne Zusatzaufwand ab | 2026-09-21 |
+| `@dnd-kit/core` + `@dnd-kit/utilities` für Drag & Drop statt Eigenbau, `react-beautiful-dnd` oder `@dnd-kit/sortable` | Aktiv gepflegt (im Gegensatz zu `react-beautiful-dnd`, das als deprecated gilt), eingebaute Touch- und Tastatur-Unterstützung deckt die Edge Cases „Touch-Gerät" und Barrierefreiheit ab. `@dnd-kit/sortable` wurde bewusst weggelassen — es ist für Neuanordnung *innerhalb* einer Liste gedacht, aber Spalten sind hier nur Drop-Ziele ohne gespeicherte Position (siehe Out-of-Scope-Entscheidung „keine manuelle Reihenfolge"); `@dnd-kit/core`s einfachere `useDraggable`/`useDroppable`-Primitive reichen aus. | 2026-09-21 |
 | Drop-Handler ruft denselben Update-Call auf, den `TaskCard`s bestehende Status-Auswahl bereits nutzt | Kein zweiter Code-Pfad für dieselbe Aktion (Status ändern); Karte wird lokal sofort verschoben (optimistisch) und bei einem Fehler des Updates zurückgesetzt | 2026-09-21 |
 | Bestehende `ScrollArea`-Komponente (shadcn/ui) für horizontales Board-Scrollen und vertikales Spalten-Scrollen, kein neues Scroll-Paket | Component bereits installiert und im Projekt etabliert; vermeidet ein zusätzliches Abhängigkeit für dieselbe Aufgabe | 2026-09-21 |
 | Kein neuer Backend-Code oder neue RLS-Policy | Drag & Drop löst denselben `UPDATE`-Aufruf auf `tasks.status` aus, der bereits durch die RLS-Policies aus PROJ-1/PROJ-4 abgesichert ist | 2026-09-21 |
+| Kollisionserkennung `pointerWithin` statt `closestCenter` | Während der Implementierung festgestellt: `closestCenter` wählt immer die nächstgelegene Spalte per Mittelpunkt-Distanz, auch wenn beim Loslassen außerhalb jeder Spalte losgelassen wird — das widerspricht der Edge-Case-Vorgabe „Loslassen außerhalb einer Spalte → keine Änderung". `pointerWithin` erkennt eine Spalte nur als Ziel, wenn der Mauszeiger tatsächlich darüber ist, sonst bleibt die Aufgabe unverändert | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -114,7 +115,29 @@ Keine neue Tabelle, kein neues Feld. Die bereits vorhandene `status`-Spalte eine
 - Kein Backend-Bedarf — reine Frontend-Änderung; die Berechtigungsprüfung, wer eine Aufgabe verschieben darf, existiert bereits vollständig aus PROJ-4/PROJ-1 und wird unverändert wiederverwendet.
 
 ### Dependencies
-- `@dnd-kit/core` + `@dnd-kit/sortable` — Drag-and-Drop-Interaktion und Spalten-/Drop-Zonen-Erkennung. Keine weiteren neuen Pakete: alle UI-Bausteine (Karten, Scrollbereiche, Buttons) sind bereits installiert.
+- `@dnd-kit/core` + `@dnd-kit/utilities` — Drag-and-Drop-Interaktion und Spalten-/Drop-Zonen-Erkennung. Keine weiteren neuen Pakete: alle UI-Bausteine (Karten, Scrollbereiche, Buttons) sind bereits installiert.
+
+## Frontend Implementation Notes
+
+`TaskList`/`task-list.tsx` aus PROJ-4 vollständig durch `TaskBoard`/`task-board.tsx` ersetzt (Datei gelöscht, alle Importe aktualisiert). Neue Komponenten in `src/components/tasks/`:
+
+- **`task-board.tsx`** (ersetzt `task-list.tsx`): lädt Aufgaben, gruppiert/sortiert sie wie bisher, rendert die drei Spalten in einer `ScrollArea` (horizontal), enthält `DndContext` mit `pointerWithin`-Kollisionserkennung, `PointerSensor` (Aktivierung erst ab 8px Bewegung, damit Klicks auf Select/Menü nicht versehentlich einen Drag auslösen) und `TouchSensor` (150ms Verzögerung für Touch-Geräte). `updateTaskStatus()` ist die einzige Stelle, die den Status in der DB ändert — optimistisches Update, Rollback + Toast-Fehlermeldung bei Fehler. Wird sowohl vom Drag-Drop-`onDragEnd` als auch von `TaskCard`s Status-Auswahl aufgerufen (ein Code-Pfad, wie im Tech Design festgelegt).
+- **`task-column.tsx`** (neu): Droppable Spalte via `useDroppable`, zeigt Überschrift mit Anzahl, hebt sich optisch hervor (`isOver`), wenn eine Karte gerade darüber schwebt; scrollt vertikal bei vielen Karten.
+- **`draggable-task-card.tsx`** (neu): dünner Wrapper, der `useDraggable` aufruft und `TaskCard` mit `ref`/Transform-Style/Handle-Props versorgt. Getrennt von `TaskCard` gehalten, damit `TaskCard` in `DragOverlay` (die schwebende Vorschau beim Ziehen) ohne einen zweiten, kollidierenden `useDraggable`-Aufruf mit derselben ID wiederverwendet werden kann.
+- **`task-card.tsx`** (überarbeitet): jetzt eine reine, `forwardRef`-fähige Präsentationskomponente ohne eigenen Datenbank-Zugriff — Layout auf schmalere Spaltenbreite umgestellt (vertikal gestapelt statt nebeneinander), neuer Greif-Icon-Handle (`GripVertical`) für Drag & Drop, bestehende Status-Auswahl und „⋮"-Menü (Bearbeiten/Löschen) unverändert als Klick-Fallback erhalten.
+- **`task-form-dialog.tsx`, `delete-task-dialog.tsx`**: unverändert in ihrer Logik, nur der `Task`-Typ-Import auf `task-board.tsx` umgestellt.
+
+**Bug während der manuellen Verifikation gefunden und behoben:** Die ursprünglich geplante Kollisionserkennung `closestCenter` schnappt immer zur nächstgelegenen Spalte, auch wenn weit außerhalb jeder Spalte losgelassen wird — das verletzte die Edge-Case-Vorgabe „Loslassen außerhalb einer Spalte → keine Änderung". Behoben durch Wechsel zu `pointerWithin` (siehe Technical Decisions oben), das nur erkennt, wenn der Zeiger tatsächlich über einer Spalte ist.
+
+**Manuelle Verifikation im Browser** (mit temporären Test-Daten, anschließend vollständig aufgeräumt; Drag & Drop über direkt dispatchte PointerEvents getestet, da das Automatisierungs-Tool keine dnd-kit-kompatible Drag-Geste simulieren konnte):
+- Board zeigt alle drei Spalten mit korrekten Zählern ✓
+- Drag & Drop zwischen allen Spaltenkombinationen (To Do → In Progress, In Progress → To Do) verschiebt die Karte visuell sofort und speichert den neuen Status korrekt in der DB ✓
+- Loslassen weit außerhalb aller Spalten ändert nichts (nach `pointerWithin`-Fix) ✓
+- Klick-Fallback (Status-Auswahl auf der Karte) funktioniert unverändert ✓
+- „Neue Aufgabe" erstellt eine Karte in „To Do" ✓
+- Bearbeiten-/Löschen-Menü und Lösch-Bestätigungsdialog funktionieren unverändert ✓
+- Leer-Zustand bei 0 Aufgaben zeigt den zentrierten Call-to-Action statt eines leeren Boards ✓
+- `npm run build` (TypeScript-Check) und `npm test` (36/36) grün
 
 ## QA Test Results
 _To be added by /qa_

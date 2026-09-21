@@ -7,7 +7,7 @@ import { ArrowLeft } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TaskList } from "@/components/tasks/task-list"
+import { TaskBoard } from "@/components/tasks/task-board"
 
 interface Project {
   id: string
@@ -69,7 +69,7 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          <TaskList projectId={project.id} teamId={project.team_id} />
+          <TaskBoard projectId={project.id} teamId={project.team_id} />
         </div>
       )}
     </div>

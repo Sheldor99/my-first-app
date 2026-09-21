@@ -1,8 +1,9 @@
 "use client"
 
-import { MoreVertical } from "lucide-react"
+import { forwardRef } from "react"
+import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core"
+import { GripVertical, MoreVertical } from "lucide-react"
 
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -20,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TASK_STATUSES, type TaskStatus } from "@/lib/validations/task"
-import type { Task } from "@/components/tasks/task-list"
+import type { Task } from "@/components/tasks/task-board"
 import type { TeamMemberProfile } from "@/hooks/use-team-members"
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -35,59 +36,62 @@ function isOverdue(dueDate: string | null, status: string) {
   return dueDate < today
 }
 
+export interface TaskCardDragHandleProps {
+  attributes: DraggableAttributes
+  listeners: DraggableSyntheticListeners
+}
+
 interface TaskCardProps {
   task: Task
   members: TeamMemberProfile[]
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void
   onStatusChange: (task: Task, status: TaskStatus) => void
+  dragHandleProps?: TaskCardDragHandleProps
+  className?: string
+  style?: React.CSSProperties
 }
 
-export function TaskCard({ task, members, onEdit, onDelete, onStatusChange }: TaskCardProps) {
+export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
+  { task, members, onEdit, onDelete, onStatusChange, dragHandleProps, className, style },
+  ref
+) {
   const assignee = members.find((m) => m.id === task.assignee_id)
   const overdue = isOverdue(task.due_date, task.status)
 
-  async function handleStatusChange(value: string) {
-    const status = value as TaskStatus
-    const supabase = createClient()
-    const { error } = await supabase.from("tasks").update({ status }).eq("id", task.id)
-    if (!error) {
-      onStatusChange(task, status)
-    }
-  }
-
   return (
-    <Card>
-      <CardContent className="flex items-start justify-between gap-2 p-4">
-        <div className="space-y-1">
-          <p className="font-medium">{task.title}</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            <span>{assignee ? assignee.email : "Niemand zugewiesen"}</span>
-            {task.due_date && (
-              <span className={cn(overdue && "font-semibold text-destructive")}>
-                Fällig: {task.due_date}
-              </span>
-            )}
-          </div>
-        </div>
+    <Card ref={ref} style={style} className={cn(className)}>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-start gap-2">
+          {dragHandleProps && (
+            <button
+              type="button"
+              {...dragHandleProps.attributes}
+              {...dragHandleProps.listeners}
+              className="mt-0.5 shrink-0 touch-none text-muted-foreground hover:text-foreground"
+              aria-label="Aufgabe verschieben"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Select value={task.status} onValueChange={handleStatusChange}>
-            <SelectTrigger className="h-8 w-[130px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {STATUS_LABELS[status]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="font-medium">{task.title}</p>
+            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+              <span className="truncate">
+                {assignee ? assignee.email : "Niemand zugewiesen"}
+              </span>
+              {task.due_date && (
+                <span className={cn(overdue && "font-semibold text-destructive")}>
+                  Fällig: {task.due_date}
+                </span>
+              )}
+            </div>
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                 <MoreVertical className="h-4 w-4" />
                 <span className="sr-only">Aufgaben-Menü</span>
               </Button>
@@ -103,7 +107,20 @@ export function TaskCard({ task, members, onEdit, onDelete, onStatusChange }: Ta
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        <Select value={task.status} onValueChange={(value) => onStatusChange(task, value as TaskStatus)}>
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TASK_STATUSES.map((status) => (
+              <SelectItem key={status} value={status}>
+                {STATUS_LABELS[status]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </CardContent>
     </Card>
   )
-}
+})

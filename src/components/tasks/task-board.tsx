@@ -2,13 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ListTodo } from "lucide-react"
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core"
+import { toast } from "sonner"
 
 import { createClient } from "@/lib/supabase/client"
 import { useTeamMembers } from "@/hooks/use-team-members"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { TASK_STATUSES, type TaskStatus } from "@/lib/validations/task"
 import { TaskCard } from "@/components/tasks/task-card"
+import { TaskColumn } from "@/components/tasks/task-column"
+import { DraggableTaskCard } from "@/components/tasks/draggable-task-card"
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog"
 import { DeleteTaskDialog } from "@/components/tasks/delete-task-dialog"
 
@@ -30,18 +45,24 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   done: "Done",
 }
 
-interface TaskListProps {
+interface TaskBoardProps {
   projectId: string
   teamId: string
 }
 
-export function TaskList({ projectId, teamId }: TaskListProps) {
+export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [deletingTask, setDeletingTask] = useState<Task | null>(null)
+  const [activeTask, setActiveTask] = useState<Task | null>(null)
   const { members } = useTeamMembers(teamId)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+  )
 
   const fetchTasks = useCallback(async () => {
     setIsLoading(true)
@@ -100,8 +121,40 @@ export function TaskList({ projectId, teamId }: TaskListProps) {
     setTasks((current) => current.filter((t) => t.id !== taskId))
   }
 
-  function handleStatusChange(task: Task, status: TaskStatus) {
-    setTasks((current) => current.map((t) => (t.id === task.id ? { ...t, status } : t)))
+  const updateTaskStatus = useCallback(async (task: Task, newStatus: TaskStatus) => {
+    if (task.status === newStatus) return
+
+    const previousStatus = task.status
+    setTasks((current) =>
+      current.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))
+    )
+
+    const supabase = createClient()
+    const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", task.id)
+
+    if (error) {
+      setTasks((current) =>
+        current.map((t) => (t.id === task.id ? { ...t, status: previousStatus } : t))
+      )
+      toast.error("Status konnte nicht geändert werden. Bitte versuche es erneut.")
+    }
+  }, [])
+
+  function handleDragStart(event: DragStartEvent) {
+    const task = tasks.find((t) => t.id === event.active.id)
+    setActiveTask(task ?? null)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveTask(null)
+    const { active, over } = event
+    if (!over) return
+
+    const task = tasks.find((t) => t.id === active.id)
+    const newStatus = over.id as TaskStatus
+    if (task) {
+      updateTaskStatus(task, newStatus)
+    }
   }
 
   if (isLoading) {
@@ -133,29 +186,50 @@ export function TaskList({ projectId, teamId }: TaskListProps) {
           <Button onClick={openCreateDialog}>Erste Aufgabe anlegen</Button>
         </div>
       ) : (
-        <div className="space-y-6">
-          {TASK_STATUSES.map((status) =>
-            grouped[status].length > 0 ? (
-              <div key={status} className="space-y-2">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  {STATUS_LABELS[status]} ({grouped[status].length})
-                </h3>
-                <div className="space-y-2">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <ScrollArea className="w-full whitespace-nowrap">
+            <div className="flex gap-4 pb-4">
+              {TASK_STATUSES.map((status) => (
+                <TaskColumn
+                  key={status}
+                  status={status}
+                  label={STATUS_LABELS[status]}
+                  count={grouped[status].length}
+                >
                   {grouped[status].map((task) => (
-                    <TaskCard
+                    <DraggableTaskCard
                       key={task.id}
                       task={task}
                       members={members}
                       onEdit={openEditDialog}
                       onDelete={setDeletingTask}
-                      onStatusChange={handleStatusChange}
+                      onStatusChange={updateTaskStatus}
                     />
                   ))}
-                </div>
-              </div>
-            ) : null
-          )}
-        </div>
+                </TaskColumn>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+
+          <DragOverlay>
+            {activeTask ? (
+              <TaskCard
+                task={activeTask}
+                members={members}
+                onEdit={() => {}}
+                onDelete={() => {}}
+                onStatusChange={() => {}}
+                className="w-72 shadow-lg"
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       <TaskFormDialog
