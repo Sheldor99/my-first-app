@@ -17,7 +17,7 @@
 |----|---------|----------|--------------|--------|------|---------|
 | PROJ-1 | Supabase Infrastructure Setup | P0 | None | Deployed | [PROJ-1](PROJ-1-supabase-infrastructure-setup.md) | 2026-09-18 |
 | PROJ-2 | Login/Signup (Auth) | P0 | PROJ-1 | Deployed | [PROJ-2](PROJ-2-login-signup.md) | 2026-09-18 |
-| PROJ-3 | Projekte anlegen/verwalten | P0 | PROJ-1, PROJ-2 | In Review | [PROJ-3](PROJ-3-projekte-anlegen-verwalten.md) | 2026-09-18 |
+| PROJ-3 | Projekte anlegen/verwalten | P0 | PROJ-1, PROJ-2 | Approved | [PROJ-3](PROJ-3-projekte-anlegen-verwalten.md) | 2026-09-18 |
 | PROJ-4 | Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum | P0 | PROJ-1, PROJ-3 | Planned | [PROJ-4](PROJ-4-aufgaben-tasks.md) | 2026-09-18 |
 | PROJ-5 | Kanban-Board-Ansicht pro Projekt | P0 | PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-6 | Kommentare zu Aufgaben | P1 | PROJ-4 | Roadmap | - | 2026-09-18 |

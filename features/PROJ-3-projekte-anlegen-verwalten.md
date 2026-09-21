@@ -1,6 +1,6 @@
 # PROJ-3: Projekte anlegen/verwalten
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -219,7 +219,7 @@ Mit einem temporären, per SQL angelegten Test-User (danach vollständig inkl. a
 
 ### Bugs Found
 
-#### BUG-1: `npm test` schlägt fehl, weil Vitest die Playwright-E2E-Datei einliest
+#### BUG-1: `npm test` schlägt fehl, weil Vitest die Playwright-E2E-Datei einliest — RESOLVED
 - **Severity:** Medium
 - **Steps to Reproduce:**
   1. `npm test` ausführen
@@ -228,14 +228,15 @@ Mit einem temporären, per SQL angelegten Test-User (danach vollständig inkl. a
   4. Workaround: `npx vitest run src/lib` (oder ein anderer eingeschränkter Pfad) statt `npm test`
 - **Ursache:** `vitest.config.ts` hat kein `exclude` für das `tests/`-Verzeichnis (dort liegen ausschließlich Playwright-Specs); Vitest übernimmt sein Standard-Include-Muster, das auch `*.spec.ts` außerhalb von `src/` erfasst
 - **Priority:** Fix before deployment empfohlen — bricht den in `CLAUDE.md` dokumentierten Standard-Befehl `npm test` und würde in einer echten CI-Pipeline den Build fälschlich als fehlgeschlagen markieren, obwohl alle Unit-Tests grün sind
-- **Hinweis für Fix (kein Fix durch QA):** In `vitest.config.ts` unter `test` ein `exclude: ['tests/**', 'node_modules/**']` ergänzen (bzw. die Playwright-Default-Excludes von Vitest wiederherstellen, falls sie versehentlich überschrieben wurden)
+- **Fix:** `vitest.config.ts` ergänzt um `exclude: [...configDefaults.exclude, 'tests/**']` (Vitests eingebaute Standard-Ausschlüsse bleiben erhalten, `tests/` kommt explizit dazu).
+- **Re-Test:** `npm test` läuft jetzt sauber durch — 3 Test-Dateien, 24/24 Tests grün, kein Fehlschlag mehr durch die Playwright-Datei.
 
 ### Summary
 - **Acceptance Criteria:** 15/15 vollständig bestanden
-- **Bugs Found:** 1 total (0 Critical, 0 High, 1 Medium, 0 Low) — betrifft Test-Tooling, nicht die Feature-Funktionalität selbst
+- **Bugs Found:** 1 total, gefixt und re-verifiziert (0 Critical, 0 High, 0 Medium offen, 0 Low)
 - **Security:** Keine Sicherheitslücken gefunden — RLS-Isolation zwischen Teams unter echtem Red-Team-Beschuss (SELECT/INSERT/UPDATE/DELETE/Spoofing-Versuche) vollständig standhaft; XSS blockiert
 - **Production Ready:** YES
-- **Recommendation:** BUG-1 (Vitest/Playwright-Konfigurationskonflikt) zeitnah fixen, da es den Standard-Testbefehl für das gesamte Projekt bricht — betrifft aber nicht die PROJ-3-Funktionalität selbst, daher keine Blockade für PROJ-3 im Speziellen. Playwright-Test-Fixture für Login als Follow-up vormerken.
+- **Recommendation:** Freigegeben. Playwright-Test-Fixture für Login als Follow-up vormerken, sobald mehrere Features davon profitieren.
 
 ## Deployment
 _To be added by /deploy_
