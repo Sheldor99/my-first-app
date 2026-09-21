@@ -14,6 +14,15 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash })
 
     if (!error) {
+      // verifyOtp for type "signup" also establishes a session. That's
+      // fine on its own, but it means the proxy's "already logged in"
+      // redirect would bounce the user away from /login before they ever
+      // see the confirmation message. Sign back out so the user actually
+      // lands on the login page and logs in normally, as the spec expects.
+      if (type === 'signup') {
+        await supabase.auth.signOut()
+      }
+
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
