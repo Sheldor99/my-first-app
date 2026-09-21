@@ -1,6 +1,6 @@
 # PROJ-4: Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -128,6 +128,23 @@ Die `tasks`-Tabelle selbst existiert bereits vollständig seit PROJ-1 und brauch
 
 ### Dependencies
 Keine neuen npm-Pakete — nur eine neue Datenbanktabelle (`profiles`) kommt hinzu.
+
+## Implementation Notes (Backend Developer)
+
+- Migration `proj4_profiles_table`: neue Tabelle `profiles` (`id` referenziert `auth.users`, `email`, `created_at`), RLS aktiviert.
+- Trigger `on_auth_user_created` (Funktion `handle_new_user`, `SECURITY DEFINER`, nach dem Muster von `handle_new_team` aus PROJ-1) legt bei jeder Registrierung automatisch einen `profiles`-Eintrag an. `EXECUTE` auf die Trigger-Funktion ist für alle Rollen entzogen (nur intern vom Trigger-Mechanismus aufrufbar, kein direkter RPC-Zugriff).
+- Helper-Funktion `shares_team_with(other_user_id)` (`SECURITY DEFINER`) prüft, ob der aufrufende Nutzer mindestens ein Team mit `other_user_id` teilt (Self-Join über `team_members`). `EXECUTE` bewusst auch an `anon` gewährt (analog zur Lehre aus PROJ-1 BUG-2) — die Funktion gibt nur einen von der eigenen `auth.uid()` abhängigen Boolean zurück, kein Datenleck.
+- RLS-Policy auf `profiles`: sichtbar für den Profil-Inhaber selbst oder für Nutzer mit gemeinsamer Team-Mitgliedschaft (`id = auth.uid() OR shares_team_with(id)`).
+- Index auf `profiles.email` (aktuell ungenutzt lt. Advisor, da noch keine Daten — erwartungsgemäß, analog zum PROJ-1-Start).
+- Security-Advisor zeigt nur die erwarteten, bewusst akzeptierten WARN-Einträge (Helper-Funktionen müssen für `authenticated`/`anon` ausführbar bleiben, damit RLS funktioniert) — keine neuen Findings.
+
+### Verifiziert (SQL, simulierte Sessions)
+- Trigger legt bei Registrierung zuverlässig einen `profiles`-Eintrag mit korrekter E-Mail an.
+- Sichtbarkeit bestätigt: Ein Nutzer sieht sein eigenes Profil sowie das eines Teamkollegen, aber **nicht** das eines Nutzers ohne gemeinsames Team (Cross-Check aus beiden Perspektiven: Owner sieht Teammate, Outsider sieht nur sich selbst).
+- Alle Test-User und das Test-Team nach Abschluss vollständig entfernt.
+
+### Noch offen (folgt in `/frontend`)
+- Kein Task-CRUD, keine Projekt-Detailseite, kein Zuweisungs-UI gebaut — laut Tech Design läuft das direkt über den Supabase-Client ohne eigenes API-Backend, analog zu PROJ-3.
 
 ## QA Test Results
 _To be added by /qa_
