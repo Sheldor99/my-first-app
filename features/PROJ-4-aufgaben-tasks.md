@@ -1,6 +1,6 @@
 # PROJ-4: Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -247,4 +247,22 @@ Keine neuen npm-Pakete — nur eine neue Datenbanktabelle (`profiles`) kommt hin
 - **Recommendation:** Freigegeben. BUG-1 (Low) bewusst zurückgestellt, bis PROJ-11 den „Mitglied verlässt Team"-Fall real einführt — bis dahin kein praktischer Anwendungsfall.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-21
+**Art:** Lokaler Produktions-Build (`npm run build` + `npm run start`), bewusst kein Vercel-Deployment (konsistent mit PROJ-1/2/3)
+**URL:** http://localhost:3000 (nur lokal erreichbar)
+**Backend:** Supabase-Projekt `my-first-app` — Migration `proj4_profiles_table` bereits während `/backend` angewendet und verifiziert
+
+### Durchgeführte Checks
+- [x] `npm run build` erfolgreich (keine TypeScript-Fehler)
+- [x] Lokaler Produktions-Server (`next start`) startet, Routenschutz greift korrekt
+- [x] Keine Secrets im Git-Repo (nur `.env.local.example` getrackt)
+- [x] Keine neuen Env-Vars nötig
+- [x] Code committed und nach `origin/main` gepusht (11 ausstehende Commits, inkl. PROJ-3 und PROJ-4)
+- [ ] `npm run lint` weiterhin nicht lauffähig — vorbestehendes Problem seit PROJ-1 (fehlende `eslint.config.js`), unverändert, weiterhin zurückgestellt
+
+### Bekannte offene Punkte
+- BUG-1 (Low, verwaiste Zuweisung) — bewusst zurückgestellt, siehe QA-Bericht
+- ESLint-Konfiguration weiterhin nicht repariert
+- Playwright-E2E-Tests weiterhin nicht ausführbar in dieser Umgebung (Browser-Installation schlägt fehl)
+- Vor einem echten Public-Launch: Vercel-Setup, Error-Tracking, Security-Headers, Lighthouse-Check (weiterhin nicht durchgeführt, da nur lokal deployed)

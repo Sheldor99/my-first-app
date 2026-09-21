@@ -1,6 +1,6 @@
 # PROJ-3: Projekte anlegen/verwalten
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -239,4 +239,8 @@ Mit einem temporären, per SQL angelegten Test-User (danach vollständig inkl. a
 - **Recommendation:** Freigegeben. Playwright-Test-Fixture für Login als Follow-up vormerken, sobald mehrere Features davon profitieren.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-21
+**Art:** Lokaler Produktions-Build (`npm run build` + `npm run start`), zusammen mit PROJ-4 deployed — beide Features laufen im selben Next.js-Build/-Deployment, PROJ-3 wurde nach seinem eigenen `/qa`-Approval nicht separat deployed, bevor die Arbeit an PROJ-4 begann
+**URL:** http://localhost:3000 (nur lokal erreichbar)
+**Backend:** Supabase-Projekt `my-first-app` — keine neuen Migrationen für PROJ-3 selbst (nutzt PROJ-1-Infrastruktur)
