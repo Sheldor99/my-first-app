@@ -1,6 +1,6 @@
 # PROJ-4: Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -87,12 +87,47 @@ _Keine offenen Fragen — im Interview geklärt._
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neue `profiles`-Tabelle, automatisch befüllt bei Registrierung | `auth.users` ist clientseitig nicht per RLS abfragbar; ohne diese Tabelle könnte die Zuweisungs-Auswahl niemandem einen Namen zeigen | 2026-09-21 |
+| Sichtbarkeit von `profiles`-Einträgen auf Nutzer mit gemeinsamer Team-Mitgliedschaft beschränkt | Verhindert, dass sich beliebige registrierte Nutzer gegenseitig entdecken können; nur echte Teamkollegen sind sichtbar | 2026-09-21 |
+| Kein eigenes Backend/API für Aufgaben-Verwaltung | Konsistent mit PROJ-3: Supabase-Client greift direkt zu, abgesichert durch die bestehende RLS aus PROJ-1 | 2026-09-21 |
+| Natives Datumsfeld statt eigenem Kalender-Widget für das Fälligkeitsdatum | Spart eine zusätzliche Abhängigkeit; für ein einzelnes Datumsfeld reicht der Standard-Datepicker des Browsers | 2026-09-21 |
+| Statusänderung direkt per Dropdown in der Aufgaben-Karte, zusätzlich zum Bearbeiten-Dialog | Statuswechsel ist die häufigste Aktion; ein eigener Dialog dafür wäre unnötig umständlich | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+/projects/[id] (Projekt-Detailseite, neu)
+├── Zurück-Link zur Startseite
+├── Projekt-Header (Name, Beschreibung)
+├── "+ Neue Aufgabe"-Button
+├── Aufgabenliste, gruppiert nach Status
+│   ├── "To Do"-Abschnitt
+│   ├── "In Progress"-Abschnitt
+│   ├── "Done"-Abschnitt
+│   │   └── je Aufgaben-Karte: Titel, Zuweisung (Name/E-Mail), Fälligkeitsdatum (rot falls überfällig), Status-Dropdown (Schnellwechsel), ⋮-Menü (Bearbeiten/Löschen)
+│   └── Empty State ("Noch keine Aufgaben" + CTA)
+├── Aufgabe-Erstellen/Bearbeiten-Dialog (Titel, Beschreibung, Zuweisungs-Auswahl, Fälligkeitsdatum)
+└── Lösch-Bestätigungsdialog
+```
+
+### Data Model (plain language)
+Eine neue Tabelle: `profiles` — pro Nutzer ein Eintrag mit E-Mail-Adresse. Wird automatisch befüllt, sobald sich jemand registriert (ähnlicher Mechanismus wie der bestehende "Ersteller wird automatisch Owner"-Automatismus aus PROJ-1). Sichtbar ist ein Profil nur für Nutzer, die mindestens ein gemeinsames Team mit dieser Person haben.
+
+Die `tasks`-Tabelle selbst existiert bereits vollständig seit PROJ-1 und braucht keine Änderung.
+
+### Tech Decisions
+- Neue `profiles`-Tabelle + automatischer Eintrag bei Registrierung: notwendig, weil `auth.users` aus Sicherheitsgründen nicht direkt abfragbar ist.
+- Sichtbarkeit von Profilen auf gemeinsame Teams beschränkt: verhindert, dass fremde Nutzer sich gegenseitig entdecken können.
+- Kein eigenes Backend/API nötig: Aufgaben-Verwaltung läuft wie bei Projekten direkt über den Supabase-Client.
+- Einfaches Datumsfeld statt eigenem Kalender-Widget: spart Komplexität fürs MVP.
+- Status-Änderung direkt in der Liste (Dropdown) zusätzlich zum Bearbeiten-Dialog: schnellerer Workflow für die häufigste Aktion.
+
+### Dependencies
+Keine neuen npm-Pakete — nur eine neue Datenbanktabelle (`profiles`) kommt hinzu.
 
 ## QA Test Results
 _To be added by /qa_
