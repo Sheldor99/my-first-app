@@ -1,6 +1,6 @@
 # PROJ-6: Kommentare zu Aufgaben
 
-## Status: In Progress
+## Status: In Review
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -166,7 +166,91 @@ Geänderte Dateien:
 - `npm run build` (TypeScript-Check) und `npm test` (42/42, inkl. 6 neuer Tests für `commentSchema`) grün
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-22
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### Kommentare anzeigen
+- [ ] **BUG-1 gefunden** (siehe unten): Kommentare sind zwar chronologisch sortiert und mit Autor/Zeitstempel versehen, aber bei mehr als ca. 5 Kommentaren sind ältere/weitere Kommentare unerreichbar (nicht scrollbar) — die Kriterien-Bedingung „sieht es **alle** Kommentare" ist damit nicht erfüllt, sobald eine Aufgabe genug Kommentare hat
+- [x] Leer-Zustand „Noch keine Kommentare" korrekt
+- [x] Kommentaranzahl auf der Karte im Board stimmt immer mit der tatsächlichen Anzahl überein (live mit 0, 1, 3 und 55 Kommentaren verifiziert)
+
+#### Kommentar hinzufügen
+- [x] Gültiger Kommentartext → erscheint sofort in der Liste, Feld wird geleert
+- [x] Leeres oder nur-Leerzeichen-Feld → Validierungsfehler „Kommentar darf nicht leer sein", nichts gespeichert
+- [x] Text über 2000 Zeichen → von der DB-Check-Constraint abgelehnt (clientseitige Zod-Validierung greift ebenfalls, siehe Backend-QA)
+
+#### Kommentar bearbeiten/löschen
+- [x] Autor kann eigenen Kommentar bearbeiten und speichern
+- [x] Nicht-Autor sieht kein „⋮"-Menü bei fremden Kommentaren
+- [x] Löschen mit Bestätigung entfernt den Kommentar sofort, Kartenzähler aktualisiert sich
+
+#### Fehlerfälle
+- [x] Simulierter Verbindungsfehler (Aufgabe während des Schreibens von einem anderen Nutzer gelöscht) → Fehlermeldung „Kommentar konnte nicht gespeichert werden…" erscheint, Eingabetext bleibt im Feld erhalten
+
+### Edge Cases Status
+
+#### EC-1: Zwei Nutzer kommentieren gleichzeitig dieselbe Aufgabe
+- [x] Handled correctly (durch Architektur bestätigt, kein Live-Zwei-Sitzungen-Test) — unabhängige Inserts ohne Unique-Constraint-Konflikt, Reihenfolge ergibt sich automatisch aus `created_at`
+
+#### EC-2: Aufgabe wird während des Schreibens gelöscht
+- [x] Handled correctly — live reproduziert (Task per SQL während offener Kommentar-Eingabe gelöscht, dann abgesendet): Fehlermeldung erscheint, kein Absturz, Eingabetext bleibt erhalten
+
+#### EC-3: Sehr viele Kommentare (50+)
+- [ ] **BUG-1 gefunden** (siehe unten) — mit 55 Testkommentaren bestätigt: die Liste wächst nicht unbegrenzt (Dialog behält seine Größe), aber sie scrollt auch nicht — Kommentare ab ca. Nr. 6 sind vollständig unsichtbar und nicht erreichbar, weder per Mausrad noch anders
+
+#### EC-4: Kommentar aus nur Leerzeichen
+- [x] Handled correctly — wird wie leer behandelt und blockiert (bestätigt durch `.trim()` in der Zod-Validierung)
+
+#### EC-5: Autor verlässt das Team, nachdem er kommentiert hat
+- [ ] **BUG-2 gefunden** (siehe unten) — der Kommentar selbst bleibt sichtbar (kein Kaskadieren-Löschen, wie gefordert), aber entgegen dem Wortlaut der Spec „bleiben **mit seiner E-Mail** sichtbar" wird die E-Mail nicht angezeigt, sondern „Ehemaliges Mitglied" — Ursache: die bestehende `profiles`-RLS-Policy (`shares_team_with()`) aus PROJ-4 verweigert verbleibenden Mitgliedern den Zugriff auf das Profil eines Nutzers, der keine gemeinsame Teammitgliedschaft mehr hat
+
+### Security Audit Results (Red Team)
+- [x] Authentication: Ohne Login kein Zugriff (bestehender Proxy-Schutz aus PROJ-2, nicht verändert)
+- [x] Authorization — direkter REST-Angriff mit echtem JWT eines Nutzers ohne Teammitgliedschaft: `GET task_comments` → leeres Ergebnis; `POST task_comments` (auch mit korrektem eigenem `author_id`) → 403 RLS-Fehler; `DELETE task_comments` → 0 betroffene Zeilen, alle 55 Kommentare in der DB unverändert
+- [x] Authorization — Impersonationsversuch (Kommentar mit fremder `author_id` einfügen) → RLS-Fehler (bereits im Backend-Schritt verifiziert)
+- [x] Input validation: Ungültiger/überlanger Text von der DB-Check-Constraint abgelehnt (Backend-Schritt), clientseitig zusätzlich durch Zod verhindert
+- [x] XSS: `<img src=x onerror=alert(1)>` als Kommentartext → wird als reiner Text angezeigt, kein Script-Execute (React-Auto-Escaping)
+- [x] Keine sensiblen Daten im Netzwerk-Traffic über das ohnehin öffentliche Supabase-Anon-Key-Modell hinaus
+
+### Regression Testing
+- [x] PROJ-5 (Kanban-Board): Drag & Drop zwischen Spalten funktioniert weiterhin unverändert (mit direkt dispatchten PointerEvents verifiziert, wie in der PROJ-5-QA), Kommentar-Button beeinträchtigt die Karten-Interaktion nicht
+- [x] `npm test`: 42/42 bestehen
+- [ ] `npm run test:e2e`: **Übersprungen** — Playwright-Browser-Installation in dieser Umgebung weiterhin nicht funktionsfähig, konsistent mit allen bisherigen QA-Zyklen in diesem Projekt
+- [ ] Cross-Browser (Firefox/Safari): **Übersprungen**, konsistent mit der für dieses Projekt getroffenen Entscheidung, nur Chromium zu testen
+
+### Bugs Found
+
+#### BUG-1: Kommentarliste nicht scrollbar — Kommentare ab ca. Nr. 6 unerreichbar
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. Eine Aufgabe mit mehr als ca. 5–6 Kommentaren öffnen (in diesem Test: 55 Kommentare eingefügt)
+  2. Kommentare-Dialog öffnen
+  3. Erwartet: die ersten paar Kommentare sind sichtbar, der Rest ist über Scrollen in der Liste erreichbar
+  4. Tatsächlich: nur die ersten ca. 5 Kommentare sind sichtbar; weder Mausrad-Scroll noch sonstige Interaktion zeigen weitere Kommentare. Per DOM-Inspektion bestätigt: Der innere Scroll-Viewport (`[data-radix-scroll-area-viewport]`) wächst auf die volle Inhaltshöhe (3504px bei 55 Kommentaren) mit `scrollHeight === clientHeight` (also nichts zum Scrollen *innerhalb* des Viewports), während der äußere `ScrollArea`-Container korrekt auf 320px (`max-h-80`) begrenzt ist und den Überschuss per `overflow: hidden` einfach abschneidet statt ihn scrollbar zu machen. Die `h-full`-Höhe der Radix-Viewport-Komponente löst sich offenbar nicht wie erwartet gegen die `max-h-80`-Begrenzung des Eltern-Elements auf.
+- **Impact:** Bei jeder Aufgabe mit mehr als eine Handvoll Kommentaren sind ältere Kommentare faktisch unsichtbar und nicht bearbeitbar/löschbar — ein Kernversprechen des Features („alle Kommentare sehen") ist nicht erfüllt. Keine Datenverluste, keine Sicherheitslücke — die Kommentare existieren unverändert in der DB.
+- **Priority:** Fix before deployment (blockiert laut Produktionsreife-Kriterium, da High-Bug)
+
+#### BUG-2: Kommentare eines ehemaligen Team-Mitglieds zeigen „Ehemaliges Mitglied" statt der in der Spec geforderten E-Mail
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Mitglied A kommentiert eine Aufgabe
+  2. Mitglied A verlässt das Team
+  3. Ein verbleibendes Mitglied öffnet die Kommentare der Aufgabe
+  4. Erwartet laut Spec-Edge-Case: „bestehende Kommentare bleiben **mit seiner E-Mail** sichtbar erhalten"
+  5. Tatsächlich: Der Kommentar bleibt sichtbar (kein Datenverlust), aber statt der E-Mail erscheint „Ehemaliges Mitglied", weil die bestehende `profiles`-RLS-Policy (`shares_team_with()`, aus PROJ-4) dem verbleibenden Mitglied keinen Lesezugriff mehr auf das Profil des ausgetretenen Autors gewährt.
+- **Assessment:** Dies ist eine bewusste, während der Frontend-Implementierung dokumentierte Design-Entscheidung (siehe Implementation Notes, analog zum „Niemand zugewiesen"-Fallback aus PROJ-4 BUG-1) — technisch korrekt und aus Datenschutzsicht sogar vorzugswürdig (kein Aufdecken der E-Mail einer Person, die keine gemeinsame Teammitgliedschaft mehr hat). Der Fund betrifft daher primär eine **Abweichung zwischen Spec-Text und tatsächlichem/beabsichtigtem Verhalten**, nicht zwingend einen Implementierungsfehler.
+- **Priority:** Nice to have — Empfehlung: Spec-Text anpassen („bleibt sichtbar, ggf. als „Ehemaliges Mitglied" falls das Profil nicht mehr einsehbar ist") statt Verhalten zu ändern, da die aktuelle Lösung konsistenter und datensparsamer ist.
+
+### Summary
+- **Acceptance Criteria:** 7/9 passed (2 betroffen von BUG-1)
+- **Bugs Found:** 2 total (0 critical, 1 high, 0 medium, 1 low)
+- **Security:** Pass — Autorisierung, Input-Validierung und XSS-Schutz funktionieren korrekt
+- **Production Ready:** NO — BUG-1 (High) muss vor dem Deployment behoben werden
+- **Recommendation:** BUG-1 zuerst beheben (ScrollArea-Höhenvererbung korrigieren, z. B. durch explizite `height`-Klasse statt `max-h-80` auf dem `ScrollArea`-Root, oder Höhe direkt auf die Radix-`Viewport`-Komponente anwenden), dann erneut `/qa` ausführen. BUG-2 kann parallel oder später als reine Doku-Korrektur behandelt werden.
 
 ## Deployment
 _To be added by /deploy_
