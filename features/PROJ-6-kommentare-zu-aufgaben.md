@@ -1,6 +1,6 @@
 # PROJ-6: Kommentare zu Aufgaben
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -111,6 +111,33 @@ Eine neue Tabelle für Kommentare, jeweils mit Bezug zur Aufgabe, dem Autor, dem
 
 ### Dependencies
 Keine neuen npm-Pakete.
+
+## Backend Implementation Notes
+
+Neue Tabelle `task_comments` via Migration `proj6_task_comments`:
+- Spalten: `id`, `task_id` (FK auf `tasks`, `on delete cascade`), `author_id` (FK auf `auth.users`, `on delete set null`), `body` (Text), `created_at`, `updated_at`
+- `CHECK (char_length(trim(body)) between 1 and 2000)` — setzt die Validierungsregeln aus der Spec auch auf DB-Ebene durch (Leerzeichen-only und Überlänge werden serverseitig abgelehnt, nicht nur clientseitig)
+- `updated_at` wird über den bereits bestehenden `set_updated_at()`-Trigger (aus PROJ-4) automatisch gepflegt
+- Index `idx_task_comments_task_id_created_at` für die chronologische Anzeige pro Aufgabe
+
+**RLS-Policies** (Berechtigungsgrenze identisch zu `tasks`: Team-Mitgliedschaft über `task_id → tasks.project_id → projects.team_id`, geprüft mit der bestehenden `is_team_member()`-Funktion aus PROJ-1):
+- SELECT: alle Team-Mitglieder
+- INSERT: alle Team-Mitglieder, aber nur mit `author_id = auth.uid()` — verhindert, dass jemand einen Kommentar im Namen einer anderen Person postet
+- UPDATE/DELETE: nur der Autor selbst (zusätzlich weiterhin an Team-Mitgliedschaft gebunden)
+
+Kein API-Code nötig — wie bei allen bisherigen Features läuft der Zugriff direkt vom Client über den Supabase-Client, abgesichert durch RLS.
+
+**Verifikation (simulierte Sessions via `SET LOCAL request.jwt.claims`, mit temporären Test-Usern, anschließend vollständig aufgeräumt):**
+- Owner fügt Kommentar hinzu → erfolgreich, Team-Mitglied kann ihn sehen und selbst kommentieren ✓
+- Team-Mitglied versucht, den Kommentar des Owners zu bearbeiten → RLS blockiert (0 betroffene Zeilen), Inhalt unverändert ✓
+- Nicht-Team-Mitglied sieht keine Kommentare der Aufgabe (leeres Ergebnis) und kann keinen Kommentar hinzufügen (RLS-Fehler) ✓
+- Team-Mitglied versucht, einen Kommentar im Namen des Owners zu posten (`author_id` fremd gesetzt) → RLS-Fehler, keine Impersonation möglich ✓
+- Nur-Leerzeichen-Kommentar und Kommentar über 2000 Zeichen → beide von der CHECK-Constraint abgelehnt ✓
+- Kommentar mit genau 2000 bzw. 1 Zeichen → beide akzeptiert (Grenzwerte korrekt) ✓
+- Autor kann eigenen Kommentar bearbeiten und löschen ✓
+- Kommentar bleibt sichtbar, nachdem der Autor das Team verlässt (kein Kaskadieren-Löschen bei Team-Austritt) ✓
+- Löschen der zugehörigen Aufgabe kaskadiert korrekt zum Löschen aller ihrer Kommentare ✓
+- `mcp__supabase__get_advisors` (security) geprüft: keine neuen Findings durch diese Migration
 
 ## QA Test Results
 _To be added by /qa_
