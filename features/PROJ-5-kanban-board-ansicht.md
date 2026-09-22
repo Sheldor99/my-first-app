@@ -1,6 +1,6 @@
 # PROJ-5: Kanban-Board-Ansicht pro Projekt
 
-## Status: In Progress
+## Status: In Review
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -140,7 +140,87 @@ Keine neue Tabelle, kein neues Feld. Die bereits vorhandene `status`-Spalte eine
 - `npm run build` (TypeScript-Check) und `npm test` (36/36) grün
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-22
+**App URL:** http://localhost:3001
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### Board anzeigen
+- [x] Drei Spalten mit Aufgaben als Karten beim Öffnen eines Projekts mit vorhandenen Aufgaben
+- [x] Zentrierter Leer-Zustand statt Board bei 0 Aufgaben
+- [x] Spaltenüberschrift-Anzahl stimmt mit tatsächlicher Kartenanzahl überein (auch nach Drag & Drop, Erstellen, Löschen live verifiziert)
+
+#### Drag & Drop
+- [x] Aufgabe von „To Do" nach „In Progress" gezogen → Status sofort sichtbar geändert und in der DB gespeichert (per direkt dispatchten PointerEvents getestet, da das Automatisierungs-Tool keine dnd-kit-kompatible Drag-Geste erzeugen kann; siehe Hinweis unten)
+- [x] Fehlgeschlagenes Speichern (Netzwerkfehler simuliert via `fetch`-Patch) → Karte springt zurück in ursprüngliche Spalte, Fehlermeldung „Status konnte nicht geändert werden. Bitte versuche es erneut." erscheint
+- [x] Loslassen innerhalb derselben Spalte → keine Änderung an Status oder Reihenfolge
+
+#### Klick-Fallback
+- [x] Status-Auswahl auf der Karte funktioniert identisch wie in PROJ-4
+
+#### Responsive Verhalten
+- [x] Strukturell verifiziert (siehe Hinweis unten): Spalten sind `w-72` (288px) mit `flex-shrink: 0` in einer `nowrap`-Flexbox, Gesamtbreite 912px, äußerer Container hat `overflow-x: scroll` — bei jeder Viewport-Breite unter ~912px scrollt das Board horizontal, alle Spalten bleiben nebeneinander erreichbar
+
+#### Aufgabe erstellen/bearbeiten/löschen
+- [x] „Neue Aufgabe" → Karte erscheint in „To Do"
+- [x] Bearbeiten ändert die Karte sofort; Löschen (mit Bestätigungsdialog) entfernt die Karte sofort
+
+**Hinweis zur Drag-&-Drop-Testmethode:** Das Browser-Automatisierungstool kann keine native Maus-Drag-Geste erzeugen, die dnd-kits `PointerSensor` als Drag erkennt (dnd-kit hängt seine Move-/Up-Listener direkt an das gezogene Element, nicht an `document`). Drag & Drop wurde daher durch direkt im Seitenkontext dispatchte `PointerEvent`-Sequenzen (`pointerdown` → mehrere `pointermove` → `pointerup`, alle auf dem tatsächlichen Drag-Handle-Element) verifiziert — dieselben Events, die dnd-kits Sensoren tatsächlich abonnieren, nur nicht über echte OS-Mausbewegung ausgelöst. Visuelle Effekte (schwebende Karte, leere Ausgangsspalte, Drop-Ziel-Hervorhebung) wurden dabei jeweils per Screenshot bestätigt.
+
+**Hinweis zur Responsive-Testmethode:** Das `resize_window`-Tool hat in dieser Umgebung `window.innerWidth` der Seite nicht tatsächlich verändert (blieb bei 960px trotz angeforderter 375px), daher konnte kein echter 375px-Screenshot aufgenommen werden. Stattdessen wurden die berechneten Stile verifiziert, die das horizontale Scrollverhalten unabhängig von der tatsächlichen Fensterbreite garantieren (siehe oben).
+
+### Edge Cases Status
+
+#### EC-1: Zwei Nutzer haben das Board gleichzeitig geöffnet
+- [x] Handled correctly (durch Architektur bestätigt, kein Live-Zwei-Sitzungen-Test) — keine Realtime-Subscription vorhanden, Änderungen anderer Nutzer werden erst beim nächsten Laden sichtbar, wie spezifiziert
+
+#### EC-2: Drag-Vorgang abbrechen (Escape-Taste oder Loslassen außerhalb einer Spalte)
+- [x] Handled correctly — Escape-Taste während eines aktiven Drags bricht ihn ab, Karte bleibt in ursprünglicher Spalte (dnd-kit-eigenes Verhalten, live verifiziert). Loslassen weit außerhalb aller Spalten ändert nichts (siehe BUG-Fix zu `pointerWithin` aus der Implementierung)
+
+#### EC-3: Aufgabe wird von einem anderen Nutzer gelöscht, während ein Drag-Vorgang dafür läuft
+- [ ] **BUG-1 gefunden** (siehe unten) — kein Absturz, aber die Karte bleibt sichtbar als „erfolgreich verschoben" ohne Fehlermeldung, obwohl die Aufgabe bereits gelöscht wurde
+
+#### EC-4: Sehr viele Aufgaben in einer Spalte (55 Testaufgaben eingefügt)
+- [x] Handled correctly — Spalte scrollt vertikal innerhalb ihres begrenzten Bereichs, andere Spalten bleiben unverändert kurz, Seitenlayout bricht nicht
+
+#### EC-5: Drag & Drop auf einem Touch-Gerät
+- [ ] Nicht mit echter Touch-Hardware getestet (kein Touch-Gerät in dieser Umgebung verfügbar). Code-Review: `TouchSensor` ist mit `{ delay: 150, tolerance: 8 }` konfiguriert, der bestehende Klick-Mechanismus bleibt als Fallback vollständig erhalten. Gleiche Einschränkung wie bei vorherigen QA-Zyklen (PROJ-4) für Touch-spezifisches Verhalten.
+
+### Security Audit Results (Red Team)
+- [x] Authentication: Ohne Login kein Zugriff (bestehender Proxy-Schutz aus PROJ-2, nicht verändert)
+- [x] Authorization — direkter REST-Angriff mit echtem JWT eines Nutzers, der nicht Mitglied des Teams ist: `PATCH /rest/v1/tasks` auf eine fremde Aufgabe → 0 betroffene Zeilen, Status in der DB unverändert (RLS aus PROJ-1/PROJ-4 greift unverändert für den neuen Drag-Drop-Pfad, da derselbe Update-Call verwendet wird)
+- [x] Authorization (positiv): legitimes Team-Mitglied kann dieselbe Aufgabe erfolgreich per REST aktualisieren
+- [x] Input validation: Ungültiger Status-Wert (inkl. SQL-Injection-artigem String) per direktem REST-Call → von der bestehenden DB-Check-Constraint `tasks_status_check` abgelehnt (HTTP 400), PostgREST parametrisiert Werte ohnehin, kein Injection-Risiko
+- [x] XSS: Aufgabentitel `<img src=x onerror=alert(1)>` wird als reiner Text angezeigt, nicht ausgeführt (React-Auto-Escaping, gilt auch für das neue Karten-Layout)
+- [x] Keine neuen Secrets oder sensiblen Daten im Netzwerk-Traffic (reine Wiederverwendung des bestehenden `tasks`-Update-Aufrufs)
+
+### Regression Testing
+- [x] PROJ-3 (Projekte anlegen/verwalten): Projektliste und -navigation unverändert funktionsfähig
+- [x] PROJ-11 (Team-Mitglieder verwalten): „Team verwalten"-Dialog vollständig funktionsfähig (Mitgliederliste, Rollenänderung, Hinzufügen/Entfernen) — keine Beeinträchtigung durch die Board-Änderungen
+- [x] `npm test`: 36/36 bestehen (keine neuen Unit-Tests nötig — PROJ-5 führt keine neue reine Logik ein, nur DOM-/dnd-kit-Integration)
+- [ ] `npm run test:e2e`: **Übersprungen** — Playwright-Browser-Installation in dieser Umgebung weiterhin nicht funktionsfähig, konsistent mit allen bisherigen QA-Zyklen in diesem Projekt
+- [ ] Cross-Browser (Firefox/Safari): **Übersprungen**, konsistent mit der für dieses Projekt getroffenen Entscheidung, nur Chromium zu testen
+
+### Bugs Found
+
+#### BUG-1: Von einem anderen Nutzer gelöschte Aufgabe bleibt nach Drag & Drop als „erfolgreich verschoben" sichtbar
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Nutzer A öffnet das Board eines Projekts und beginnt, eine Aufgabe per Drag & Drop zu verschieben (Pointer gedrückt halten, über eine andere Spalte bewegen, aber noch nicht loslassen)
+  2. Während der Drag-Vorgang läuft, löscht Nutzer B (oder ein Admin-Zugriff) genau diese Aufgabe aus der Datenbank
+  3. Nutzer A lässt die Karte in der neuen Spalte los
+  4. Erwartet: Die Karte springt zurück bzw. verschwindet, und es erscheint dieselbe Fehlermeldung wie beim Netzwerkfehler-Fall („Status konnte nicht geändert werden…"), wie im Edge Case der Spec beschrieben
+  5. Tatsächlich: Die Karte bleibt in der neuen Spalte sichtbar, keine Fehlermeldung erscheint. Grund: Supabase/PostgREST meldet ein `UPDATE` auf eine nicht mehr existierende Zeile nicht als Fehler zurück (0 betroffene Zeilen = technisch „erfolgreiche" Anfrage ohne `error`-Objekt), daher greift der bestehende Rollback-Code-Pfad nicht. Kein Absturz, keine Datenkorruption — die Karte verschwindet spätestens beim nächsten Neuladen der Seite korrekt.
+- **Priority:** Fix in next sprint (kein Blocker für dieses Deployment — schmales Zeitfenster, kein Datenverlust, Workaround durch Neuladen vorhanden)
+
+### Summary
+- **Acceptance Criteria:** 10/10 passed
+- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low)
+- **Security:** Pass — Autorisierung, Input-Validierung und XSS-Schutz funktionieren korrekt für den neuen Drag-Drop-Pfad, da er denselben abgesicherten Update-Aufruf wie der bestehende Klick-Mechanismus nutzt
+- **Production Ready:** YES (BUG-1 ist Medium, kein Critical/High-Blocker)
+- **Recommendation:** Deploy. BUG-1 zur späteren Behebung vormerken (z. B. `.update().select()` verwenden und bei leerem Ergebnis-Array denselben Fehlerpfad wie bei einem echten Fehler auslösen).
 
 ## Deployment
 _To be added by /deploy_
