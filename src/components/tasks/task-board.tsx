@@ -130,9 +130,13 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
     )
 
     const supabase = createClient()
-    const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", task.id)
+    const { data, error } = await supabase
+      .from("tasks")
+      .update({ status: newStatus })
+      .eq("id", task.id)
+      .select("id")
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       setTasks((current) =>
         current.map((t) => (t.id === task.id ? { ...t, status: previousStatus } : t))
       )

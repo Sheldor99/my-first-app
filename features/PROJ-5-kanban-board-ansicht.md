@@ -1,6 +1,6 @@
 # PROJ-5: Kanban-Board-Ansicht pro Projekt
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -180,7 +180,7 @@ Keine neue Tabelle, kein neues Feld. Die bereits vorhandene `status`-Spalte eine
 - [x] Handled correctly — Escape-Taste während eines aktiven Drags bricht ihn ab, Karte bleibt in ursprünglicher Spalte (dnd-kit-eigenes Verhalten, live verifiziert). Loslassen weit außerhalb aller Spalten ändert nichts (siehe BUG-Fix zu `pointerWithin` aus der Implementierung)
 
 #### EC-3: Aufgabe wird von einem anderen Nutzer gelöscht, während ein Drag-Vorgang dafür läuft
-- [ ] **BUG-1 gefunden** (siehe unten) — kein Absturz, aber die Karte bleibt sichtbar als „erfolgreich verschoben" ohne Fehlermeldung, obwohl die Aufgabe bereits gelöscht wurde
+- [x] Handled correctly — **BUG-1 gefunden und behoben** (siehe unten). Nach dem Fix zeigt die App korrekt die Fehlermeldung „Status konnte nicht geändert werden. Bitte versuche es erneut." und die Karte springt zurück in ihre ursprüngliche Spalte, exakt wie im Netzwerkfehler-Fall — mit demselben Live-Repro (Drag gestartet, Aufgabe währenddessen per SQL gelöscht, Drop ausgeführt) erneut verifiziert.
 
 #### EC-4: Sehr viele Aufgaben in einer Spalte (55 Testaufgaben eingefügt)
 - [x] Handled correctly — Spalte scrollt vertikal innerhalb ihres begrenzten Bereichs, andere Spalten bleiben unverändert kurz, Seitenlayout bricht nicht
@@ -207,20 +207,22 @@ Keine neue Tabelle, kein neues Feld. Die bereits vorhandene `status`-Spalte eine
 
 #### BUG-1: Von einem anderen Nutzer gelöschte Aufgabe bleibt nach Drag & Drop als „erfolgreich verschoben" sichtbar
 - **Severity:** Medium
+- **Status:** Fixed (auf Nutzerwunsch sofort behoben, nicht zurückgestellt)
 - **Steps to Reproduce:**
   1. Nutzer A öffnet das Board eines Projekts und beginnt, eine Aufgabe per Drag & Drop zu verschieben (Pointer gedrückt halten, über eine andere Spalte bewegen, aber noch nicht loslassen)
   2. Während der Drag-Vorgang läuft, löscht Nutzer B (oder ein Admin-Zugriff) genau diese Aufgabe aus der Datenbank
   3. Nutzer A lässt die Karte in der neuen Spalte los
   4. Erwartet: Die Karte springt zurück bzw. verschwindet, und es erscheint dieselbe Fehlermeldung wie beim Netzwerkfehler-Fall („Status konnte nicht geändert werden…"), wie im Edge Case der Spec beschrieben
-  5. Tatsächlich: Die Karte bleibt in der neuen Spalte sichtbar, keine Fehlermeldung erscheint. Grund: Supabase/PostgREST meldet ein `UPDATE` auf eine nicht mehr existierende Zeile nicht als Fehler zurück (0 betroffene Zeilen = technisch „erfolgreiche" Anfrage ohne `error`-Objekt), daher greift der bestehende Rollback-Code-Pfad nicht. Kein Absturz, keine Datenkorruption — die Karte verschwindet spätestens beim nächsten Neuladen der Seite korrekt.
-- **Priority:** Fix in next sprint (kein Blocker für dieses Deployment — schmales Zeitfenster, kein Datenverlust, Workaround durch Neuladen vorhanden)
+  5. Tatsächlich (vor dem Fix): Die Karte blieb in der neuen Spalte sichtbar, keine Fehlermeldung erschien. Grund: Supabase/PostgREST meldet ein `UPDATE` auf eine nicht mehr existierende Zeile nicht als Fehler zurück (0 betroffene Zeilen = technisch „erfolgreiche" Anfrage ohne `error`-Objekt), daher griff der bestehende Rollback-Code-Pfad nicht.
+- **Fix:** `updateTaskStatus()` in `task-board.tsx` hängt jetzt `.select("id")` an das Update an und behandelt ein leeres Ergebnis-Array (0 betroffene Zeilen) genauso wie ein `error`-Objekt — löst denselben Rollback- und Toast-Pfad aus. Mit demselben Live-Repro erneut verifiziert: Fehlermeldung erscheint korrekt, Karte bleibt in ursprünglicher Spalte.
+- **Priority:** Fixed before deployment
 
 ### Summary
 - **Acceptance Criteria:** 10/10 passed
-- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low)
+- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low) — **fixed and re-verified**
 - **Security:** Pass — Autorisierung, Input-Validierung und XSS-Schutz funktionieren korrekt für den neuen Drag-Drop-Pfad, da er denselben abgesicherten Update-Aufruf wie der bestehende Klick-Mechanismus nutzt
-- **Production Ready:** YES (BUG-1 ist Medium, kein Critical/High-Blocker)
-- **Recommendation:** Deploy. BUG-1 zur späteren Behebung vormerken (z. B. `.update().select()` verwenden und bei leerem Ergebnis-Array denselben Fehlerpfad wie bei einem echten Fehler auslösen).
+- **Production Ready:** YES
+- **Recommendation:** Deploy.
 
 ## Deployment
 _To be added by /deploy_
