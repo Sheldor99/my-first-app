@@ -26,6 +26,7 @@ import { TaskColumn } from "@/components/tasks/task-column"
 import { DraggableTaskCard } from "@/components/tasks/draggable-task-card"
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog"
 import { DeleteTaskDialog } from "@/components/tasks/delete-task-dialog"
+import { TaskCommentsDialog } from "@/components/tasks/task-comments-dialog"
 
 export interface Task {
   id: string
@@ -57,12 +58,35 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [deletingTask, setDeletingTask] = useState<Task | null>(null)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
+  const [commentsTask, setCommentsTask] = useState<Task | null>(null)
   const { members } = useTeamMembers(teamId)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
   )
+
+  const fetchCommentCounts = useCallback(async (taskIds: string[]) => {
+    if (taskIds.length === 0) {
+      setCommentCounts({})
+      return
+    }
+
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("task_comments")
+      .select("task_id")
+      .in("task_id", taskIds)
+
+    if (!error && data) {
+      const counts: Record<string, number> = {}
+      for (const row of data) {
+        counts[row.task_id] = (counts[row.task_id] ?? 0) + 1
+      }
+      setCommentCounts(counts)
+    }
+  }, [])
 
   const fetchTasks = useCallback(async () => {
     setIsLoading(true)
@@ -76,9 +100,10 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
 
     if (!error && data) {
       setTasks(data)
+      fetchCommentCounts(data.map((task) => task.id))
     }
     setIsLoading(false)
-  }, [projectId])
+  }, [projectId, fetchCommentCounts])
 
   useEffect(() => {
     fetchTasks()
@@ -142,6 +167,10 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
       )
       toast.error("Status konnte nicht geändert werden. Bitte versuche es erneut.")
     }
+  }, [])
+
+  const handleCommentsChanged = useCallback((taskId: string, count: number) => {
+    setCommentCounts((current) => ({ ...current, [taskId]: count }))
   }, [])
 
   function handleDragStart(event: DragStartEvent) {
@@ -210,9 +239,11 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
                       key={task.id}
                       task={task}
                       members={members}
+                      commentCount={commentCounts[task.id] ?? 0}
                       onEdit={openEditDialog}
                       onDelete={setDeletingTask}
                       onStatusChange={updateTaskStatus}
+                      onOpenComments={setCommentsTask}
                     />
                   ))}
                 </TaskColumn>
@@ -252,6 +283,15 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
         }}
         task={deletingTask}
         onDeleted={handleDeleted}
+      />
+
+      <TaskCommentsDialog
+        open={commentsTask !== null}
+        onOpenChange={(open) => {
+          if (!open) setCommentsTask(null)
+        }}
+        task={commentsTask}
+        onCommentsChanged={handleCommentsChanged}
       />
     </div>
   )

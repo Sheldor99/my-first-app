@@ -12,9 +12,11 @@ import type { TaskStatus } from "@/lib/validations/task"
 interface DraggableTaskCardProps {
   task: Task
   members: TeamMemberProfile[]
+  commentCount?: number
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void
   onStatusChange: (task: Task, status: TaskStatus) => void
+  onOpenComments?: (task: Task) => void
 }
 
 export function DraggableTaskCard({ task, ...rest }: DraggableTaskCardProps) {

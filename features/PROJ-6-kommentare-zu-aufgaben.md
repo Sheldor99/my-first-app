@@ -139,6 +139,32 @@ Kein API-Code nötig — wie bei allen bisherigen Features läuft der Zugriff di
 - Löschen der zugehörigen Aufgabe kaskadiert korrekt zum Löschen aller ihrer Kommentare ✓
 - `mcp__supabase__get_advisors` (security) geprüft: keine neuen Findings durch diese Migration
 
+## Frontend Implementation Notes
+
+Neue Dateien:
+- **`src/lib/validations/comment.ts`**: `commentSchema` (Zod, `.trim()` + 1–2000 Zeichen) inkl. Tests — Leerzeichen-only wird durch `.trim()` vor der Längenprüfung korrekt als leer erkannt.
+- **`src/hooks/use-task-comments.ts`**: lädt Kommentare einer Aufgabe chronologisch, löst Autor-E-Mails über einen zweiten Query gegen `profiles` auf (gleiches Zwei-Schritt-Muster wie `use-team-members.ts`, da keine direkte FK zwischen `task_comments` und `profiles` besteht). Ein Autor, der das Team verlassen hat, ist über `profiles`-RLS für verbleibende Mitglieder nicht mehr sichtbar — die UI zeigt in dem Fall „Ehemaliges Mitglied" statt der E-Mail (entspricht der spezifizierten „Kommentare bleiben erhalten"-Regel und dem bestehenden „Niemand zugewiesen"-Fallback-Muster aus PROJ-4).
+- **`src/components/tasks/task-comments-dialog.tsx`** (neu): Dialog mit Kommentarliste (Autor, Zeitstempel, „⋮"-Menü nur bei eigenen Kommentaren), Leer-Zustand, Bearbeiten-Inline-Formular und Hinzufügen-Formular unten. Meldet die aktuelle Kommentaranzahl per Callback an `TaskBoard` zurück, sobald sie geladen ist.
+
+Geänderte Dateien:
+- **`task-card.tsx`**: neuer Kommentar-Button (Sprechblasen-Icon + Anzahl, Anzahl nur sichtbar wenn > 0) neben der Status-Auswahl; nur sichtbar, wenn `onOpenComments` übergeben wird (im `DragOverlay`-Vorschaubild bewusst weggelassen, da nicht interaktiv).
+- **`draggable-task-card.tsx`**: neue optionale Props `commentCount`/`onOpenComments` durchgereicht.
+- **`task-board.tsx`**: lädt beim Laden des Boards die Kommentaranzahl pro Aufgabe in einer einzigen Batch-Abfrage (`select task_id ... in (...)`, client-seitig gezählt), hält sie in einem `commentCounts`-State und übergibt sie an die Karten; verwaltet den geöffneten Kommentare-Dialog.
+
+**Bug während der manuellen Verifikation gefunden und behoben:** Die ursprüngliche `onCommentsChanged`-Callback-Prop wurde als Inline-Funktion direkt im JSX übergeben, was bei jedem Render von `TaskBoard` eine neue Funktionsreferenz erzeugte. Da der Dialog diese Referenz in einem `useEffect`-Dependency-Array verwendet, löste das einen unendlichen Update-Loop aus („Maximum update depth exceeded"), sobald der Kommentare-Dialog geöffnet wurde. Behoben durch `useCallback` mit leerem Dependency-Array in `TaskBoard` für `handleCommentsChanged`.
+
+**Manuelle Verifikation im Browser** (mit temporären Test-Daten, anschließend vollständig aufgeräumt):
+- Kommentar-Zähler auf der Karte zeigt korrekt „1" bzw. nur das Icon ohne Zahl bei 0 Kommentaren ✓
+- Dialog öffnen, bestehenden Kommentar sehen (Autor + Zeitstempel) ✓
+- Neuen Kommentar hinzufügen → erscheint sofort, Feld wird geleert, Zähler auf der Karte aktualisiert sich ✓
+- Eigenen Kommentar bearbeiten → Text ändert sich sofort ✓
+- Eigenen Kommentar löschen → verschwindet sofort, Zähler aktualisiert sich zurück ✓
+- Leeres bzw. nur-Leerzeichen-Kommentar absenden → Validierungsfehler „Kommentar darf nicht leer sein" ✓
+- Leer-Zustand „Noch keine Kommentare" bei einer Aufgabe ohne Kommentare ✓
+- Als zweiter Nutzer (Team-Mitglied, nicht Autor) eingeloggt: fremder Kommentar sichtbar, aber ohne „⋮"-Menü (kein Bearbeiten/Löschen) ✓
+- XSS-Payload (`<img src=x onerror=alert(1)>`) als Kommentartext → wird als reiner Text angezeigt, nicht ausgeführt (React-Auto-Escaping) ✓
+- `npm run build` (TypeScript-Check) und `npm test` (42/42, inkl. 6 neuer Tests für `commentSchema`) grün
+
 ## QA Test Results
 _To be added by /qa_
 

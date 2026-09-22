@@ -2,7 +2,7 @@
 
 import { forwardRef } from "react"
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core"
-import { GripVertical, MoreVertical } from "lucide-react"
+import { GripVertical, MessageSquare, MoreVertical } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,16 +44,29 @@ export interface TaskCardDragHandleProps {
 interface TaskCardProps {
   task: Task
   members: TeamMemberProfile[]
+  commentCount?: number
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void
   onStatusChange: (task: Task, status: TaskStatus) => void
+  onOpenComments?: (task: Task) => void
   dragHandleProps?: TaskCardDragHandleProps
   className?: string
   style?: React.CSSProperties
 }
 
 export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
-  { task, members, onEdit, onDelete, onStatusChange, dragHandleProps, className, style },
+  {
+    task,
+    members,
+    commentCount = 0,
+    onEdit,
+    onDelete,
+    onStatusChange,
+    onOpenComments,
+    dragHandleProps,
+    className,
+    style,
+  },
   ref
 ) {
   const assignee = members.find((m) => m.id === task.assignee_id)
@@ -108,18 +121,37 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
           </DropdownMenu>
         </div>
 
-        <Select value={task.status} onValueChange={(value) => onStatusChange(task, value as TaskStatus)}>
-          <SelectTrigger className="h-8 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TASK_STATUSES.map((status) => (
-              <SelectItem key={status} value={status}>
-                {STATUS_LABELS[status]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select
+            value={task.status}
+            onValueChange={(value) => onStatusChange(task, value as TaskStatus)}
+          >
+            <SelectTrigger className="h-8 flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {STATUS_LABELS[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {onOpenComments && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 gap-1 px-2 text-muted-foreground"
+              onClick={() => onOpenComments(task)}
+            >
+              <MessageSquare className="h-4 w-4" />
+              {commentCount > 0 && <span className="text-xs">{commentCount}</span>}
+              <span className="sr-only">Kommentare</span>
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
