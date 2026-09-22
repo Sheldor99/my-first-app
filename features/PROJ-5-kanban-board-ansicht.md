@@ -1,6 +1,6 @@
 # PROJ-5: Kanban-Board-Ansicht pro Projekt
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -225,4 +225,21 @@ Keine neue Tabelle, kein neues Feld. Die bereits vorhandene `status`-Spalte eine
 - **Recommendation:** Deploy.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-22
+**Art:** Lokaler Produktions-Build (`npm run build` + `npm run start`), bewusst kein Vercel-Deployment (konsistent mit PROJ-1/2/3/4/11)
+**URL:** http://localhost:3000 (nur lokal erreichbar)
+**Backend:** Keine neuen Migrationen — reine Frontend-Änderung, nutzt bestehende `tasks`-RLS-Policies aus PROJ-1/PROJ-4 unverändert
+
+### Durchgeführte Checks
+- [x] `npm run build` erfolgreich (keine TypeScript-Fehler)
+- [x] Lokaler Produktions-Server (`next start`, testweise auf Port 3011, da 3000/3001 durch laufende Dev-Server belegt waren) startet fehlerfrei, Routenschutz greift korrekt (`/` → 307 Redirect, `/login` → 200)
+- [x] Keine Secrets im Git-Repo (nur `.env.local.example` getrackt, keine neuen Env-Vars für PROJ-5 nötig)
+- [x] QA-Freigabe vorhanden (Approved), BUG-1 (Medium) bereits vor diesem Deploy gefixt und re-verifiziert
+- [x] Arbeitsverzeichnis sauber, alle Commits vorhanden
+- [ ] `npm run lint` weiterhin nicht lauffähig — vorbestehendes Problem seit PROJ-1 (Next.js 16 hat `next lint` entfernt, ESLint-9-Flat-Config-Migration steht aus), unverändert, weiterhin zurückgestellt
+
+### Bekannte offene Punkte
+- ESLint-Konfiguration weiterhin nicht repariert
+- Playwright-E2E-Tests weiterhin nicht ausführbar in dieser Umgebung (Browser-Installation schlägt wiederholt fehl, `__dirlock`-Konflikt)
+- Vor einem echten Public-Launch: Vercel-Setup, Error-Tracking, Security-Headers, Lighthouse-Check (weiterhin nicht durchgeführt, da nur lokal deployed)
