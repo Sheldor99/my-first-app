@@ -1,6 +1,6 @@
 # PROJ-6: Kommentare zu Aufgaben
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -78,12 +78,39 @@ _Keine offenen Fragen — Standardentscheidungen konsistent mit bestehenden Must
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Eigene Datenbanktabelle für Kommentare statt eines Textfelds auf der Aufgaben-Tabelle | Beliebig viele Kommentare pro Aufgabe möglich, saubere Struktur; entspricht dem „eine Tabelle pro Entität"-Muster aus PROJ-1/PROJ-4 | 2026-09-22 |
+| Berechtigungsprüfung vollständig über Row Level Security, keine eigene Server-Logik | Gleiche Sicherheitsgrenze wie bei Aufgaben (PROJ-4/PROJ-1); Muster hat sich in allen bisherigen Features bewährt | 2026-09-22 |
+| Kommentaranzahl auf der Karte wird bei jedem Laden aus der Kommentar-Tabelle gezählt, kein separates Zähler-Feld | Vermeidet Synchronisationsprobleme zwischen einem gespeicherten Zähler und der tatsächlichen Anzahl | 2026-09-22 |
+| Kommentare in einem eigenen Dialog statt im bestehenden Aufgaben-Bearbeiten-Dialog | Trennt Metadaten-Bearbeitung von der Diskussion; kein Umbau des bestehenden `TaskFormDialog` nötig | 2026-09-22 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+TaskCard (bestehend, erweitert)
+└── Kommentar-Icon mit Anzahl (neu, öffnet den Kommentare-Dialog)
+
+Kommentare-Dialog (neu)
+├── Kommentarliste (chronologisch, mit Autor-E-Mail + Zeitstempel)
+│   └── Pro eigenem Kommentar: Bearbeiten/Löschen-Menü
+├── Leer-Zustand ("Noch keine Kommentare")
+└── Kommentar-hinzufügen-Formular (Textfeld + Button, unten fixiert)
+```
+
+### Data Model (plain language)
+Eine neue Tabelle für Kommentare, jeweils mit Bezug zur Aufgabe, dem Autor, dem Text (max. 2000 Zeichen) und einem Erstellzeitpunkt. Kein neues Feld auf der bestehenden Aufgaben-Tabelle — die Anzahl der Kommentare auf der Karte wird beim Laden aus der Kommentar-Tabelle gezählt statt separat gepflegt, damit Zähler und tatsächliche Anzahl nie auseinanderlaufen können.
+
+### Tech Decisions
+- Eigene Datenbanktabelle statt Kommentare in der Aufgaben-Tabelle zu speichern — saubere Struktur, beliebig viele Kommentare pro Aufgabe möglich, entspricht dem „eine Tabelle pro Entität"-Muster aus PROJ-1/PROJ-4.
+- Berechtigungsprüfung läuft komplett über die Datenbank (Row Level Security), genau wie bei Aufgaben/Projekten/Teams — kein zusätzlicher Server-Code nötig, gleiche Sicherheitsgrenze wie bei Aufgaben.
+- Kommentaranzahl wird live gezählt statt in einem Extra-Feld gepflegt — vermeidet Synchronisationsprobleme zwischen Zähler und tatsächlicher Anzahl.
+- Kein neues UI-Paket — Dialog, Textfeld, Badge sind bereits installiert und werden wiederverwendet.
+
+### Dependencies
+Keine neuen npm-Pakete.
 
 ## QA Test Results
 _To be added by /qa_
