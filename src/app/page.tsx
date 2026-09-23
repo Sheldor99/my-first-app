@@ -77,6 +77,11 @@ export default function Home() {
               onTeamsChanged={() => refetchTeams()}
             />
           )}
+          {!isTeamsLoading && teams.length > 0 && (
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">{email}</span>

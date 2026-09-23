@@ -1,6 +1,6 @@
 # PROJ-9: Reporting/Analytics-Dashboard
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -106,6 +106,41 @@ Es wird keine neue Tabelle angelegt. Das Dashboard liest ausschließlich bereits
 
 ### Dependencies
 Keine neuen npm-Pakete — reine Tabellen-/Textdarstellung mit bereits vorhandenen shadcn/ui-Komponenten, keine Chart-Bibliothek und keine Datei-Uploads nötig.
+
+## Frontend Implementation Notes
+
+### Komponenten
+- `src/hooks/use-dashboard-stats.ts` — ruft eine einzige RPC-Funktion auf (`supabase.rpc("get_team_dashboard_stats", { p_team_id: teamId })`) und liefert ein Array vorberechneter Projekt-Statistiken zurück
+- `src/app/dashboard/page.tsx` — neue Seite: liest das aktive Team über den bestehenden `useTeams()`-Hook (identisch zur Startseite), zeigt die Statistiken in einer `Table` (shadcn/ui), Lade-Zustand (Skeleton) und Leer-Zustand ("Noch keine Projekte in diesem Team")
+- `src/app/page.tsx` — neuer „Dashboard"-Link im Header neben dem Team-Switcher, führt zu `/dashboard`
+
+### Auth/Zugriffsschutz
+Kein zusätzlicher Code nötig: `src/proxy.ts` (globale Middleware) leitet bereits jeden nicht eingeloggten Zugriff auf einen beliebigen nicht-öffentlichen Pfad automatisch zu `/login` um — `/dashboard` ist nicht in `PUBLIC_PATHS` gelistet und damit automatisch geschützt. Erfüllt die Spec-Anforderung „nicht eingeloggt → Redirect zu Login" ohne eigene Implementierung.
+
+### Vertrag für die geplante Backend-Funktion (für `/backend` verbindlich)
+Der Hook erwartet eine Postgres-Funktion `get_team_dashboard_stats(p_team_id uuid)`, aufrufbar per RPC, die für jedes Projekt des übergebenen Teams eine Zeile mit folgender Form zurückgibt:
+
+```
+project_id: uuid
+project_name: text
+todo_count: integer
+in_progress_count: integer
+done_count: integer
+overdue_count: integer
+total_minutes: integer
+```
+
+Wichtig für `/backend`:
+- Der Funktionsname und die Parameter-Bezeichnung (`p_team_id`, mit `p_`-Präfix) müssen exakt übereinstimmen, sonst schlägt der RPC-Aufruf fehl
+- Die Funktion muss selbst prüfen, dass der aufrufende Nutzer Mitglied des übergebenen Teams ist (analog zu `is_team_member()`), bevor sie Daten zurückgibt — sonst könnte ein Nutzer durch einen manipulierten RPC-Aufruf mit einer fremden `team_id` Statistiken eines fremden Teams abfragen. Das ist die Umsetzung der Spec-Anforderung „Team-fremder Nutzer hat keinen Zugriff".
+- „Überfällig" bedeutet: `due_date < aktuelles Datum AND status <> 'done'` — identische Logik zur bestehenden Überfälligkeits-Markierung auf der Aufgaben-Karte (PROJ-4/PROJ-5)
+- `total_minutes` ist die Summe aus `task_time_entries.duration_minutes` aller Aufgaben des Projekts (0, falls keine Einträge vorhanden)
+
+### Hinweis zur Implementierungsreihenfolge
+Wie bei PROJ-8 wurde das Frontend vor dem Backend gebaut. `npx tsc --noEmit` und `npm run build` sind fehlerfrei, da der Supabase-Client ohne generierte Datenbank-/RPC-Typen verwendet wird. **Kein Browser-Test möglich**, bevor `/backend` die Funktion `get_team_dashboard_stats` angelegt hat — ein Aufruf der Seite würde aktuell einen Fehler vom RPC-Aufruf zurückbekommen (Funktion existiert noch nicht).
+
+### Supabase-Zugriffsbilanz dieses Schritts
+0 Supabase-Zugriffe — der gesamte Frontend-Schritt bestand ausschließlich aus lokalem Code (Komponenten, Hook, Routing) und lokalen Checks (`tsc`, `npm run build`).
 
 ## QA Test Results
 _To be added by /qa_
