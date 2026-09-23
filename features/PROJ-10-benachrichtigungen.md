@@ -116,10 +116,17 @@ Keine neuen npm-Pakete — Verwendung bereits vorhandener shadcn/ui-Komponenten 
 ### Komponenten
 - `src/hooks/use-notifications.ts` — lädt Benachrichtigungen des eingeloggten Nutzers (`recipient_id = auth.uid()`), reichert sie mit Aufgaben-Titel/Projekt-ID (Join über `tasks`) und Auslöser-E-Mail (Join über `profiles`) an; `markAsRead(id)` und `markAllAsRead()` mit optimistischem UI-Update und Rollback per Neuladen bei Fehler
 - `src/components/notifications/notification-bell.tsx` — Glocken-Icon mit Anzahl-Badge, öffnet ein `Popover` mit scrollbarer Liste (`ScrollArea h-80`, von Anfang an begrenzt), „Alle als gelesen markieren"-Button, Leer-Zustand („Keine Benachrichtigungen")
-- `src/app/page.tsx` und `src/app/dashboard/page.tsx` — Glocke im jeweiligen Header eingebunden
+- `src/components/layout/app-header.tsx` — neue, gemeinsame Kopfzeile (Team-Switcher, Dashboard-Link, Glocke, E-Mail, Logout), selbstständig (lädt eigene Auth-/Team-Daten)
+- `src/components/layout/team-provider.tsx` — React-Context, der `useTeams()` einmal zentral hält, damit `AppHeader` und die Seiteninhalte denselben Team-Zustand teilen (ein Team-Wechsel im Header aktualisiert sofort die Projektliste/das Dashboard, ohne Neuladen)
+- `src/app/(main)/layout.tsx` — neues Layout für die Routen-Gruppe `(main)`, umschließt `AppHeader` + `TeamProvider` um alle eingeloggten Seiten
 
-### Bekannte Lücke: keine globale Kopfzeile im Projekt
-Das Projekt hat aktuell keine gemeinsame Layout-Kopfzeile (`src/app/layout.tsx` enthält nur `<Toaster />`, jede Seite baut ihren eigenen Header). Die Glocke wurde daher nur auf den zwei Seiten mit vorhandenem Header eingebunden (Startseite, Dashboard). **Die Aufgaben-Detailseite (`/projects/[id]`) hat gar keinen Header** und zeigt die Glocke daher nicht — ein vorbestehender struktureller Zustand des Projekts, keine Neueinführung durch dieses Feature. Eine echte „von überall erreichbar"-Lösung würde einen größeren Refactor (gemeinsame Layout-Kopfzeile für alle eingeloggten Seiten) erfordern, der über den Rahmen dieses Features hinausgeht.
+### Nachträglicher Refactor: gemeinsame Layout-Kopfzeile (auf Nutzerwunsch)
+Ursprünglich hatte das Projekt keine gemeinsame Kopfzeile — jede Seite baute ihre eigene. Auf ausdrücklichen Wunsch wurde das nachträglich behoben:
+- `src/app/page.tsx`, `src/app/dashboard/page.tsx` und `src/app/projects/[id]/page.tsx` wurden nach `src/app/(main)/...` verschoben (Next.js Route-Gruppe — ändert die URLs nicht: weiterhin `/`, `/dashboard`, `/projects/[id]`)
+- Beide bisherigen Seiten-Header (Startseite, Dashboard) wurden entfernt und durch die eine gemeinsame `AppHeader`-Komponente im neuen `(main)/layout.tsx` ersetzt
+- **Nebeneffekt:** Die Aufgaben-Detailseite (`/projects/[id]`) hat jetzt zum ersten Mal überhaupt eine Kopfzeile (vorher gar keine) — Glocke, Team-Switcher und Dashboard-Link sind jetzt auch dort sichtbar
+- **Löst nebenbei BUG-2 aus der PROJ-9-QA** (kein Team-Switcher auf der Dashboard-Seite) — die Dashboard-Seite hat jetzt denselben Team-Switcher wie überall sonst
+- Öffentliche Seiten (`/login`, `/signup`, `/forgot-password`, `/reset-password`) liegen weiterhin außerhalb der `(main)`-Gruppe und sind unverändert ohne Kopfzeile
 
 ### Verlinkung zur Aufgabe
 Da einzelne Aufgaben keine eigene URL/Ankerstelle im Aufgaben-Board haben, verlinkt eine Benachrichtigung auf die Projektseite (`/projects/{project_id}`), auf der die Aufgabe liegt — nicht direkt auf die Aufgabe selbst (kein Scroll-to/Highlight). Das erfüllt die Spec-Anforderung „Link zur betroffenen Aufgabe" auf der gröbsten sinnvollen Ebene, die mit der bestehenden Board-Struktur möglich ist, ohne das Board selbst zu erweitern.
@@ -149,6 +156,38 @@ Wie bei PROJ-8/PROJ-9 wurde das Frontend vor dem Backend gebaut. `npx tsc --noEm
 
 ### Supabase-Zugriffsbilanz dieses Schritts
 0 Supabase-Zugriffe — ausschließlich lokaler Code und lokale Checks (`tsc`, `npm run build`).
+
+## Backend Implementation Notes
+
+### Datenbankschema
+Neue Tabelle `notifications`:
+- `id` (uuid, PK), `recipient_id` (uuid, FK → `auth.users.id` ON DELETE CASCADE — für wen die Benachrichtigung ist), `task_id` (uuid, FK → `tasks.id` ON DELETE CASCADE — erfüllt den Edge Case „Aufgabe gelöscht → Benachrichtigung mitgelöscht"), `actor_id` (uuid, FK → `auth.users.id` ON DELETE SET NULL — ermöglicht „Ehemaliges Mitglied")
+- `type` (text, CHECK `in ('assignment', 'comment')`), `is_read` (boolean, default false), `created_at` (timestamptz, default now())
+- Index auf `(recipient_id, created_at desc)` für die sortierte Anzeige und die schnelle Zählung ungelesener Einträge
+
+RLS-Policies auf `notifications` (RLS aktiviert):
+- **SELECT** — nur `recipient_id = auth.uid()` (strenger als das sonstige Team-weite Muster, siehe Architektur-Entscheidung)
+- **UPDATE** — nur `recipient_id = auth.uid()` (für „als gelesen markieren")
+- **Keine INSERT/DELETE-Policy für normale Nutzer** — Benachrichtigungen entstehen ausschließlich über die unten beschriebenen Trigger, kein Client darf sie direkt anlegen oder löschen
+
+### Automatische Erzeugung per Trigger (wie in der Architektur festgelegt)
+Zwei `SECURITY DEFINER`-Trigger-Funktionen (notwendig, da eine Benachrichtigung für eine *andere* Person als den Handelnden angelegt wird — eine normale RLS-Policy könnte das nicht erlauben, da `recipient_id` dabei nie `auth.uid()` des Auslösers ist):
+
+- `notify_task_assignment()` — `AFTER UPDATE` auf `tasks`. Legt eine Benachrichtigung an, wenn `assignee_id` sich tatsächlich ändert (`IS DISTINCT FROM`), der neue Assignee nicht null ist, und der neue Assignee nicht der Handelnde selbst ist (`<> auth.uid()`) — erfüllt „keine Selbstbenachrichtigung bei Selbstzuweisung"
+- `notify_task_comment()` — `AFTER INSERT` auf `task_comments`. Ermittelt den `assignee_id` der kommentierten Aufgabe; legt eine Benachrichtigung an, wenn ein Assignee gesetzt ist und dieser nicht der Kommentator selbst ist — erfüllt „keine Selbstbenachrichtigung bei eigenem Kommentar"
+
+Beide Funktionen lesen `auth.uid()` innerhalb der Trigger-Funktion, um den Handelnden zu ermitteln — das funktioniert unabhängig von `SECURITY DEFINER`, da `auth.uid()` eine sitzungsbezogene Einstellung ausliest, keine Berechtigung der ausführenden Rolle.
+
+### Migration
+- `proj10_notifications` — ein einziger Migrationsaufruf: Tabelle, RLS-Policies, Index, beide Trigger-Funktionen und Trigger
+
+### Verifikation — auf Code-Review reduziert (explizite Nutzeranfrage)
+Auf ausdrücklichen Wunsch des Nutzers wurde **kein** Live-Test durchgeführt — der gesamte Backend-Schritt bestand aus einem einzigen `apply_migration`-Aufruf. Die Korrektheit stützt sich auf:
+- Code-Review der SQL gegen den in den Frontend Implementation Notes festgelegten Vertrag (Spaltennamen, Typen stimmen überein)
+- Sorgfältiges Lesen der Trigger-Bedingungen (`IS DISTINCT FROM`, `<> auth.uid()`, `<> new.author_id`) gegen die entsprechenden Acceptance Criteria
+- Lokale Checks: `npx tsc --noEmit` und `npm run build` laufen fehlerfrei
+
+**Bekannte Lücke:** Die Trigger-Logik wurde nie mit echten Daten ausgeführt — insbesondere nicht bestätigt: (1) dass eine Zuweisungsänderung durch eine dritte Person tatsächlich eine Benachrichtigung für den neuen Assignee erzeugt, (2) dass Selbstzuweisung/Selbstkommentar korrekt KEINE Benachrichtigung erzeugt, (3) dass ein Nutzer ausschließlich seine eigenen Benachrichtigungen sieht. Sollte in der QA-Phase Supabase-Zugriff wieder unproblematisch sein, sollte dort ein einmaliger Smoke-Test mit zwei Testnutzern erfolgen (Zuweisung + Kommentar, jeweils mit und ohne Selbstbezug).
 
 ## QA Test Results
 _To be added by /qa_

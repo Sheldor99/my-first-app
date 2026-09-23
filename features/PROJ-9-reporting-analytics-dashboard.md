@@ -224,6 +224,7 @@ Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf
 - **Severity:** Low
 - **Beobachtung:** Die Dashboard-Seite zeigt nur einen „Zurück"-Link, aber keinen Team-Switcher. Der in der Spec beschriebene Edge Case „Nutzer wechselt das Team über den Team-Switcher, während das Dashboard offen ist" kann auf dieser Seite so nicht direkt stattfinden — der Nutzer muss zurück zur Startseite navigieren, dort das Team wechseln und dann erneut zum Dashboard gehen.
 - **Priority:** Nice to have — funktional kein Blocker (der Umweg funktioniert), aber weicht vom in der Spec beschriebenen Ablauf ab
+- **Status:** ✅ Behoben als Nebeneffekt von PROJ-10 (2026-09-23) — im Rahmen des dort umgesetzten gemeinsamen Layout-Headers (`src/app/(main)/layout.tsx` + `AppHeader`) hat die Dashboard-Seite jetzt denselben Team-Switcher wie die Startseite.
 
 #### BUG-3: Irreführender Leer-Zustand, wenn der Nutzer gar kein Team hat
 - **Severity:** Low
