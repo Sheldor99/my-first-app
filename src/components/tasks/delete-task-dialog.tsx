@@ -40,14 +40,6 @@ export function DeleteTaskDialog({
     try {
       const supabase = createClient()
 
-      const attachmentFolder = `${teamId}/${task.id}`
-      const { data: files } = await supabase.storage.from("task-attachments").list(attachmentFolder)
-      if (files && files.length > 0) {
-        await supabase.storage
-          .from("task-attachments")
-          .remove(files.map((file) => `${attachmentFolder}/${file.name}`))
-      }
-
       const { error } = await supabase.from("tasks").delete().eq("id", task.id)
 
       if (error) {
@@ -57,6 +49,18 @@ export function DeleteTaskDialog({
 
       onDeleted(task.id)
       onOpenChange(false)
+
+      // Metadata rows are already gone via FK cascade, so the storage
+      // DELETE policy now allows any team member to clean up these files
+      // regardless of who originally uploaded them (see storage.objects
+      // policy: "not exists ... task_attachments").
+      const attachmentFolder = `${teamId}/${task.id}`
+      const { data: files } = await supabase.storage.from("task-attachments").list(attachmentFolder)
+      if (files && files.length > 0) {
+        await supabase.storage
+          .from("task-attachments")
+          .remove(files.map((file) => `${attachmentFolder}/${file.name}`))
+      }
     } catch (err) {
       console.error(err)
       toast.error("Verbindung fehlgeschlagen. Bitte versuche es erneut.")

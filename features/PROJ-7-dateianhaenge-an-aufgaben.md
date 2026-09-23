@@ -167,6 +167,7 @@ Alle Testdaten (Nutzer, Team, Projekt, Aufgabe, Anhang-Zeilen, Storage-Objekte) 
 ### Migrationen
 - `proj7_task_attachments` — Tabelle, RLS-Policies, Index
 - `proj7_task_attachments_bucket` — Bucket-Eintrag + Storage-RLS-Policies
+- `proj7_fix_orphaned_attachment_files` — Bugfix-Migration (siehe Bugfix-Runde unten): erweitert die DELETE-Policy auf `storage.objects` um einen zweiten Fall
 
 ## Frontend Implementation Notes
 
@@ -177,7 +178,7 @@ Alle Testdaten (Nutzer, Team, Projekt, Aufgabe, Anhang-Zeilen, Storage-Objekte) 
 - `src/components/tasks/task-card.tsx` — neues Paperclip-Icon mit Anzahl-Badge neben dem bestehenden Kommentar-Icon, öffnet den Anhänge-Dialog (`onOpenAttachments`)
 - `src/components/tasks/draggable-task-card.tsx` — reicht `attachmentCount`/`onOpenAttachments` durch
 - `src/components/tasks/task-board.tsx` — lädt Anhang-Anzahl pro Aufgabe (`fetchAttachmentCounts`), verwaltet den geöffneten Anhänge-Dialog-State, aktualisiert die Anzahl nach Änderungen
-- `src/components/tasks/delete-task-dialog.tsx` — vor dem Löschen der Aufgabe werden zuerst alle Dateien unter `{teamId}/{taskId}/` im Storage-Bucket aufgelistet und entfernt (clientseitige Kaskade gemäß Architekturentscheidung), erst danach wird die Aufgabe selbst gelöscht
+- `src/components/tasks/delete-task-dialog.tsx` — löscht zuerst die Aufgabe selbst (kaskadiert sofort alle `task_attachments`-Metadatenzeilen per FK), listet danach alle Dateien unter `{teamId}/{taskId}/` im Storage-Bucket auf und entfernt sie (Reihenfolge seit BUG-1-Fix umgedreht — siehe Bugfix-Runde)
 
 ### Upload-/Lösch-Ablauf
 - Upload: clientseitige Validierung (Größe, Typ) → `storage.upload()` mit Pfad `{teamId}/{taskId}/{uuid}-{dateiname}` → Metadaten-Insert in `task_attachments`; schlägt der Metadaten-Insert fehl, wird die bereits hochgeladene Datei wieder aus dem Storage entfernt, um keine verwaiste Datei zurückzulassen (Edge Case aus der Spec)
@@ -197,6 +198,20 @@ Nicht end-to-end im Browser testbar: Upload einer >10-MB-Datei (Größenvalidier
 Alle Testdaten (Testkonto, Team, Projekt, Aufgabe) nach Abschluss vollständig entfernt und über Zählabfragen auf 0 verifiziert.
 
 `npx tsc --noEmit` und `npm run build` fehlerfrei.
+
+### Bugfix-Runde (nach /qa)
+
+**BUG-1 behoben:** Verwaiste Storage-Dateien bei Task-Löschung, wenn Anhänge von mehreren Nutzern stammen.
+
+- **Root Cause:** Die Storage-DELETE-Policy erlaubte ausschließlich `owner = auth.uid()`. Der clientseitige Cleanup-Code lief im Kontext des löschenden Nutzers und konnte dadurch keine Dateien anderer Uploader entfernen.
+- **Fix (Migration `proj7_fix_orphaned_attachment_files`):** Die DELETE-Policy auf `storage.objects` wurde um einen zweiten, eng gefassten Fall erweitert: Ein Team-Mitglied darf eine Datei zusätzlich dann löschen, wenn **keine** `task_attachments`-Zeile mehr auf diesen Speicherpfad verweist (`not exists (select 1 from task_attachments where storage_path = name)`). Die ursprüngliche „nur Hochlader"-Regel für **lebende** Anhänge bleibt dabei unverändert bestehen — dieser zweite Fall greift ausschließlich für bereits verwaiste Referenzen.
+- **Fix (Frontend, `delete-task-dialog.tsx`):** Reihenfolge umgedreht — die Aufgabe wird jetzt zuerst gelöscht (kaskadiert sofort alle Metadaten-Zeilen), danach erst werden die zugehörigen Storage-Dateien aufgelistet und entfernt. Dadurch sind die Metadaten-Zeilen zum Zeitpunkt der Storage-Bereinigung bereits weg, und die neue Policy erlaubt dem löschenden Team-Mitglied, auch fremde Dateien zu entfernen.
+- **Verifikation (simulierte Sessions):**
+  - Team-Mitglied A kann weiterhin **nicht** die lebende (noch mit einer Metadaten-Zeile verknüpfte) Datei von Mitglied B löschen (0 betroffene Zeilen) ✓ — Sicherheitsanforderung „nur Hochlader darf löschen" bleibt für aktive Anhänge intakt
+  - Nach Löschen der Aufgabe (Metadaten-Zeilen sofort kaskadiert) kann Mitglied A jetzt sowohl die eigene als auch Mitglied B's Datei aus dem Storage entfernen ✓
+  - Ein Team-fremder Nutzer kann eine verwaiste Datei desselben Teams weiterhin **nicht** löschen (0 betroffene Zeilen) — die `is_team_member()`-Prüfung bleibt in beiden Fällen wirksam ✓
+  - `get_advisors(type: "security")` erneut geprüft — keine neuen Findings
+  - Alle Testdaten nach Abschluss vollständig entfernt und über Zählabfragen auf 0 verifiziert
 
 ## QA Test Results
 
