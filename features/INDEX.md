@@ -22,7 +22,7 @@
 | PROJ-5 | Kanban-Board-Ansicht pro Projekt | P0 | PROJ-1, PROJ-4 | Deployed | [PROJ-5](PROJ-5-kanban-board-ansicht.md) | 2026-09-18 |
 | PROJ-6 | Kommentare zu Aufgaben | P1 | PROJ-1, PROJ-4 | Deployed | [PROJ-6](PROJ-6-kommentare-zu-aufgaben.md) | 2026-09-18 |
 | PROJ-7 | Dateianhänge an Aufgaben | P1 | PROJ-1, PROJ-4 | Deployed | [PROJ-7](PROJ-7-dateianhaenge-an-aufgaben.md) | 2026-09-18 |
-| PROJ-8 | Zeiterfassung | P2 | PROJ-4 | In Progress | [PROJ-8](PROJ-8-zeiterfassung.md) | 2026-09-18 |
+| PROJ-8 | Zeiterfassung | P2 | PROJ-4 | Approved | [PROJ-8](PROJ-8-zeiterfassung.md) | 2026-09-18 |
 | PROJ-9 | Reporting/Analytics-Dashboard | P2 | PROJ-3, PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-10 | Benachrichtigungen | P2 | PROJ-4, PROJ-6 | Roadmap | - | 2026-09-18 |
 | PROJ-11 | Team-Mitglieder einladen/verwalten | P0 | PROJ-1, PROJ-2, PROJ-4 | Deployed | [PROJ-11](PROJ-11-team-mitglieder-verwalten.md) | 2026-09-20 |

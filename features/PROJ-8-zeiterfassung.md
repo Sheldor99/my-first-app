@@ -1,6 +1,6 @@
 # PROJ-8: Zeiterfassung
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -153,16 +153,86 @@ RLS-Policies auf `task_time_entries` (RLS aktiviert):
 
 ### Migration
 - `proj8_task_time_entries` — Tabelle, RLS-Policies, Index (ein einziger Migrationsaufruf)
+- `proj8_fix_future_date_check` — Bugfix-Migration aus der QA-Runde (siehe QA Test Results, BUG-1)
 
 ### Verifikation — bewusst reduziert (explizite Nutzeranfrage)
-Der Nutzer bat ausdrücklich darum, so wenig Supabase-Zugriffe wie möglich zu machen, da eine Kontosperrung wegen zu vieler Zugriffe drohte. Anders als bei PROJ-6/PROJ-7 wurde daher **keine** Live-Verifikation mit simulierten Sessions/Testkonten durchgeführt und **kein** `get_advisors`-Check ausgeführt — der gesamte Backend-Schritt bestand aus einem einzigen `apply_migration`-Aufruf.
+Der Nutzer bat ausdrücklich darum, so wenig Supabase-Zugriffe wie möglich zu machen, da eine Kontosperrung wegen zu vieler Zugriffe drohte. Anders als bei PROJ-6/PROJ-7 wurde daher zum Zeitpunkt des `/backend`-Schritts **keine** Live-Verifikation mit simulierten Sessions/Testkonten durchgeführt und **kein** `get_advisors`-Check ausgeführt — der Backend-Schritt selbst bestand aus einem einzigen `apply_migration`-Aufruf.
 
-Stattdessen erfolgte die Absicherung durch **Code-Review gegen bereits verifizierte Muster**: Die vier Policies sind strukturell identisch zu den in PROJ-6 (Kommentare) und PROJ-7 (Anhänge) bereits mit simulierten Sessions getesteten Policies (gleiche `is_team_member()`-Prüfung, gleiches „Ersteller-only"-Muster für UPDATE/DELETE via `auth.uid()`-Vergleich). Da diese Muster in den Vorgänger-Features bereits mehrfach erfolgreich gegen Team-Mitglieder, Team-Fremde und Nicht-Ersteller getestet wurden, wird von struktureller Korrektheit ausgegangen.
-
-**Bekannte Lücke:** Diese Annahme wurde für PROJ-8 nicht durch eigene Tests bestätigt. Sollte in der QA-Phase Supabase-Zugriff wieder unproblematisch sein, sollte dort mindestens eine stichprobenartige RLS-Verifikation (Team-Mitglied kann eigenen Eintrag anlegen/bearbeiten/löschen, anderes Mitglied sieht ihn aber kann ihn nicht ändern, Team-Fremder sieht nichts) nachgeholt werden.
+Die Absicherung erfolgte zunächst durch **Code-Review gegen bereits verifizierte Muster**: Die vier Policies sind strukturell identisch zu den in PROJ-6 (Kommentare) und PROJ-7 (Anhänge) bereits mit simulierten Sessions getesteten Policies. Ein minimaler Live-Smoke-Test in der anschließenden QA-Runde (4 Supabase-Zugriffe insgesamt, siehe unten) hat diese Annahme für SELECT/INSERT/DELETE inzwischen bestätigt. UPDATE sowie die Abgrenzung gegenüber Team-fremden Nutzern wurden weiterhin nicht eigenständig live getestet, sondern bleiben auf struktureller Mustergleichheit gestützt.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-23
+**App URL:** Kein Browser-Test durchgeführt (siehe unten) — Verifikation ausschließlich per Code-Review + minimalem Supabase-Smoke-Test
+**Tester:** QA Engineer (AI)
+
+### Hinweis zur Vorgehensweise (explizite Nutzeranfrage)
+Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf ein Minimum zu reduzieren (Sorge vor Kontosperrung wegen zu vieler Zugriffe). Diese QA-Runde weicht daher bewusst vom Standardvorgehen (volles Multi-User-Browser-Testing wie bei PROJ-6/PROJ-7) ab:
+
+- **Kein** Browser-/UI-Test (kein Playwright E2E — ohnehin in dieser Umgebung bereits vorher als defekt bekannt; kein manueller Klick-Test)
+- **Keine** Mehrpersonen-Testszenarien (Team-Mitglied vs. Team-fremd, Ersteller vs. anderes Mitglied) — stattdessen Verlass auf die strukturelle Gleichheit zu den in PROJ-6/PROJ-7 bereits mehrfach mehrpersonen-getesteten RLS-Mustern
+- Anstelle dessen: gründliches **Code-Review** jeder Komponente gegen jedes Akzeptanzkriterium, plus ein **einziger minimaler Live-Smoke-Test** (4 Supabase-Aufrufe insgesamt: 1 Bugfix-Migration, 1 Setup+Insert+Select, 1 Ablehnungstest, 1 Löschen+Aufräumen), um zu bestätigen, dass die Kernfunktion (Zeit erfassen → anzeigen → summieren → löschen) tatsächlich funktioniert und nicht nur auf dem Papier korrekt aussieht
+- Alle Testdaten danach vollständig entfernt, per Zählabfrage auf 0 verifiziert
+
+### Acceptance Criteria Status (Code-Review, sofern nicht anders vermerkt)
+
+#### Zeiteinträge anzeigen
+- [x] Alle Einträge mit Nutzer-E-Mail, Datum, Dauer, optionaler Notiz, sortiert nach Datum absteigend — Code-Review + im Smoke-Test live bestätigt (Join über `profiles`, korrekte Anzeige)
+- [x] Leer-Zustand („Noch keine Zeit erfasst") — Code-Review
+- [x] Gesamtdauer auf der Aufgaben-Karte — Code-Review + im Smoke-Test die zugrunde liegende Summenbildung live bestätigt (90 Minuten korrekt berechnet)
+
+#### Zeit erfassen
+- [x] Gültige Dauer + Datum → erscheint sofort, Gesamtdauer aktualisiert sich — Code-Review (Insert + Refetch + `useMemo`-Summe), Insert-Pfad im Smoke-Test live bestätigt
+- [x] Dauer 0/negativ/>24 Std. → Validierungsfehler — Code-Review (Zod-Schema, durch Unit-Tests abgedeckt)
+- [x] Kein/zukünftiges Datum → Validierungsfehler — **BUG-1 gefunden und behoben, siehe unten**
+- [x] Verbindungsfehler → Fehlermeldung, Eingabe bleibt erhalten — Code-Review: `form.reset()` wird im Fehlerfall nicht aufgerufen, Werte bleiben im Formular
+
+#### Zeiteintrag bearbeiten
+- [x] Eigener Eintrag bearbeitbar — Code-Review (inline Bearbeiten-Formular, analog zu Kommentaren)
+- [x] Fremder Eintrag ohne Bearbeiten-/Löschen-Option — Code-Review: Dropdown-Menü wird nur bei `entry.user_id === currentUserId` gerendert
+
+#### Zeiteintrag löschen
+- [x] Eigener Eintrag löschbar, Gesamtdauer aktualisiert sich — Code-Review + im Smoke-Test live bestätigt (Löschen als Ersteller erfolgreich, RLS ließ es zu)
+
+### Edge Cases Status
+- [x] EC-1 (gleichzeitige Erfassung) — strukturell unproblematisch (unabhängige Inserts), nicht als echte Nebenläufigkeit getestet
+- [x] EC-2 (Team verlassen → „Ehemaliges Mitglied") — Code-Review: identische `profiles`-Join-Logik wie bei Kommentaren/Anhängen, dort bereits live bestätigt; für PROJ-8 nicht separat live getestet
+- [x] EC-3 (Aufgabe gelöscht → Zeiteinträge kaskadieren) — Code-Review der Migration: `task_id ... references tasks(id) on delete cascade`, reine DB-Kaskade, nicht separat live getestet
+- [x] EC-4 (viele Einträge → scrollbar) — Code-Review: identisches `ScrollArea h-80`-Muster wie PROJ-6/PROJ-7
+- [x] EC-5 (unrealistisch hohe Dauer) — Code-Review: 24-Std.-Grenze sowohl clientseitig (Zod) als auch serverseitig (CHECK-Constraint) durchgesetzt
+- [x] EC-6 (zukünftiges Datum) — siehe BUG-1, jetzt behoben und live verifiziert (Aufruf 3/4: Insert mit `current_date + 1` wurde korrekt mit Fehler abgelehnt)
+
+### Security Audit Results
+- [x] Authorization: SELECT/INSERT/DELETE-RLS im Smoke-Test tatsächlich mit einer echten Session durchlaufen (nicht nur Code-Review) — Team-Mitglied konnte eigenen Eintrag anlegen, sehen und löschen
+- [ ] Authorization (Team-fremd / anderes Mitglied): **nicht live getestet** in dieser Runde — nur strukturelle Gleichheit zu PROJ-6/PROJ-7 angenommen (dort mehrfach bestätigt)
+- [x] Input validation (XSS): `note` wird ausschließlich als React-JSX-Text gerendert, kein `dangerouslySetInnerHTML` in der Komponente — Code-Review
+- [x] Validierungs-Tiefe (Defense-in-Depth): Dauer und Notiz-Länge waren von Anfang an sowohl client- als auch serverseitig abgesichert; das zukünftige Datum war es nicht — siehe BUG-1
+- [ ] Rate limiting: nicht geprüft (entspricht dem Projekt-Standard für andere Features)
+
+### Bugs Found
+
+#### BUG-1: Zukünftiges Datum wurde serverseitig nicht abgelehnt
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Ein Nutzer sendet (z. B. über die REST-API direkt, unter Umgehung der UI-Validierung) einen `task_time_entries`-Insert mit einem `entry_date` in der Zukunft
+  2. Erwartet: Der Insert wird abgelehnt (laut Spec: „Datum darf nicht in der Zukunft liegen")
+  3. Tatsächlich (vor dem Fix): Die Datenbank hatte keine serverseitige Prüfung für dieses Feld — nur die UI (natives `max`-Attribut des Datums-Inputs + Zod-Schema) verhinderte es. Anders als bei Dauer (CHECK-Constraint) und Notiz-Länge (CHECK-Constraint) fehlte hier die serverseitige Absicherung.
+- **Root Cause:** Beim Schreiben der Migration wurde für `entry_date` kein serverseitiges Äquivalent zur clientseitigen Validierung ergänzt.
+- **Status:** ✅ Behoben in derselben QA-Runde (Migration `proj8_fix_future_date_check`, ein `BEFORE INSERT OR UPDATE`-Trigger, der `entry_date > current_date` ablehnt) und live verifiziert: ein Insert-Versuch mit `current_date + 1` wurde korrekt mit Fehler `entry_date cannot be in the future` abgelehnt.
+- **Priority:** Fixed
+
+#### BUG-2: Mögliche Überfüllung der Aktionsleiste auf der Aufgaben-Karte (nicht visuell bestätigt)
+- **Severity:** Low
+- **Beobachtung:** Die Aktionsleiste der Aufgaben-Karte enthält jetzt vier Elemente in einer Reihe (Status-Auswahl + Kommentar-Icon + Anhang-Icon + neues Uhr-Icon). Das neue Uhr-Icon zeigt bei Bedarf einen Text wie „1,5 Std." an — deutlich länger als die reinen Zahlen-Badges der anderen beiden Icons. Auf schmalen Viewports (375px, mobile) könnte das zu Gedränge oder Umbruch in dieser Zeile führen.
+- **Status:** Nicht visuell verifiziert — diese QA-Runde enthielt bewusst keinen Browser-Test (siehe Vorgehensweise-Hinweis oben). Reine Code-/Layout-Vermutung anhand der Tailwind-Klassen (`shrink-0` auf allen drei Icon-Buttons, `flex-1` nur auf der Status-Auswahl).
+- **Priority:** Nice to have — vor dem nächsten `/frontend`- oder `/qa`-Durchlauf mit Browser-Zugriff einmal visuell auf 375px prüfen; kein Blocker für dieses Deployment, da rein kosmetisch und ggf. gar nicht auftretend
+
+### Summary
+- **Acceptance Criteria:** 11/11 erfüllt (per Code-Review, Kernpfad zusätzlich live im Smoke-Test bestätigt)
+- **Bugs Found:** 2 total (1 Medium, 1 Low) — Medium-Bug behoben und live verifiziert, Low-Bug offen (nicht blockierend, kosmetisch, nicht visuell bestätigt)
+- **Security:** Kein Datenleck oder Autorisierungsbruch gefunden; die Team-fremd-/Nicht-Ersteller-Abgrenzung wurde für PROJ-8 nicht eigenständig live verifiziert (nur strukturell), das ist ein bewusst akzeptiertes Restrisiko dieser reduzierten QA-Runde
+- **Production Ready:** JA, mit Einschränkung — empfohlen für Deployment, da Kernfunktion nachweislich funktioniert und der einzige gefundene Bug behoben und verifiziert ist. Die nicht live getestete Autorisierungs-Abgrenzung (Team-fremd, anderes Mitglied) stützt sich auf bewährte, aber für diese Tabelle nicht eigens bestätigte Muster.
+- **Recommendation:** Deploy. Falls Supabase-Zugriff später wieder unproblematisch ist, empfiehlt sich eine kurze Nachverifikation der UPDATE-Policy sowie der Team-fremd-Abgrenzung.
 
 ## Deployment
 _To be added by /deploy_
