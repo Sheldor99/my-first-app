@@ -19,7 +19,7 @@ function formatTimestamp(iso: string) {
   })
 }
 
-function notificationText(notification: Notification) {
+export function notificationText(notification: Notification) {
   const actor = notification.actor_email ?? "Ehemaliges Mitglied"
   const task = notification.task_title ?? "einer Aufgabe"
 

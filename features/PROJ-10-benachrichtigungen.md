@@ -1,6 +1,6 @@
 # PROJ-10: Benachrichtigungen
 
-## Status: In Progress
+## Status: In Review
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -190,7 +190,73 @@ Auf ausdrücklichen Wunsch des Nutzers wurde **kein** Live-Test durchgeführt �
 **Bekannte Lücke:** Die Trigger-Logik wurde nie mit echten Daten ausgeführt — insbesondere nicht bestätigt: (1) dass eine Zuweisungsänderung durch eine dritte Person tatsächlich eine Benachrichtigung für den neuen Assignee erzeugt, (2) dass Selbstzuweisung/Selbstkommentar korrekt KEINE Benachrichtigung erzeugt, (3) dass ein Nutzer ausschließlich seine eigenen Benachrichtigungen sieht. Sollte in der QA-Phase Supabase-Zugriff wieder unproblematisch sein, sollte dort ein einmaliger Smoke-Test mit zwei Testnutzern erfolgen (Zuweisung + Kommentar, jeweils mit und ohne Selbstbezug).
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-23
+**App URL:** Kein Browser-Test durchgeführt (siehe unten) — Verifikation per Code-Review + einem gezielten Sicherheits-Check
+**Tester:** QA Engineer (AI)
+
+### Hinweis zur Vorgehensweise (explizite Nutzeranfrage + eine Ausnahme)
+Der Nutzer bat um minimalen Supabase-Zugriff für diese QA-Runde. Diese Runde bestand daher überwiegend aus Code-Review + der bestehenden Vitest-Suite. **Eine Ausnahme:** Ein beim Code-Review entdeckter, sicherheitsrelevanter Verdacht (siehe BUG-1) wurde mit 3 gezielten, rein lesenden Supabase-Abfragen verifiziert (RLS-Policy-Definition von `tasks`, Trigger-Liste, `get_advisors`) — das war laut Projekt-Vereinbarung explizit erlaubt, da Sicherheitsfragen Vorrang vor der Zugriffs-Minimierung haben.
+
+### Acceptance Criteria Status (per Code-Review)
+
+#### Benachrichtigung erhalten
+- [x] Zuweisung durch andere Person → Benachrichtigung — Code-Review: Trigger-Bedingung `new.assignee_id IS NOT NULL AND IS DISTINCT FROM old.assignee_id AND <> auth.uid()` korrekt
+- [x] Selbstzuweisung → keine Benachrichtigung — durch dieselbe Bedingung abgedeckt (`<> auth.uid()`)
+- [x] Kommentar auf fremd zugewiesener Aufgabe → Benachrichtigung — Trigger prüft `v_assignee_id <> new.author_id`
+- [x] Kommentar auf eigener Aufgabe → keine Benachrichtigung — durch dieselbe Bedingung abgedeckt
+
+#### Benachrichtigungen anzeigen
+- [x] Ungelesene Anzahl sichtbar ohne Liste zu öffnen — Badge am Glocken-Icon, immer sichtbar
+- [x] Liste mit Beschreibung, Zeitpunkt, Link zur Aufgabe, neueste zuerst — Hook sortiert `created_at desc`; Link führt auf `/projects/{project_id}` (siehe Scope-Anmerkung in den Frontend-Notizen zur fehlenden Aufgaben-Detailansicht)
+- [x] Leer-Zustand — vorhanden
+
+#### Als gelesen markieren
+- [x] Klick auf ungelesene Benachrichtigung → gelesen, Anzahl sinkt — optimistisches Update + Neuladen bei Fehler
+- [x] „Alle als gelesen markieren" — analog umgesetzt
+
+### Edge Cases Status
+- [x] Aufgabe gelöscht → Benachrichtigung kaskadiert — `task_id ... references tasks(id) on delete cascade` in der Migration bestätigt
+- [x] Mitglied verlässt Team → „Ehemaliges Mitglied" — identisches `profiles`-Join-Muster wie PROJ-6/7/8, dort bereits live bestätigt
+- [x] Viele Benachrichtigungen → scrollbar — `ScrollArea h-80` von Anfang an vorhanden
+- [x] Schnelle Zuweisungswechsel → je eine eigene Benachrichtigung pro tatsächlicher Änderung — durch Row-Level-Trigger-Semantik (pro UPDATE eine Auswertung) gegeben
+- [x] Kommentar gelöscht → Benachrichtigung bleibt — keine FK-Kopplung von `notifications` an `task_comments`, strukturell unmöglich, dass ein Comment-Delete die Notification löscht
+
+### Security Audit Results
+- [x] RLS SELECT/UPDATE auf `notifications`: `recipient_id = auth.uid()` — Code-Review, nicht live mit zwei echten Nutzern getestet (siehe bekannte Lücke aus `/backend`)
+- [x] XSS: `notificationText()` wird als reiner JSX-Text gerendert, kein `dangerouslySetInnerHTML`
+- [ ] **BUG-1 (siehe unten): Bestätigter Autorisierungs-Fehler — Zuweisungs-Trigger validiert `assignee_id` nicht gegen Team-Mitgliedschaft**
+- [x] `get_advisors(type: "security")` geprüft: `notify_task_assignment`/`notify_task_comment` sind laut Linter theoretisch per RPC aufrufbar (`anon`/`authenticated`) — praktisch ungefährlich, da Postgres Funktionen mit `RETURNS trigger` außerhalb eines echten Trigger-Kontexts grundsätzlich nicht direkt ausführen lässt (Fehler „trigger functions can only be called as triggers")
+- Nebenbefund (nicht PROJ-10 zuzurechnen): `get_advisors` zeigt, dass die PROJ-8/PROJ-9-Funktionen `reject_future_time_entry_date` und `get_team_dashboard_stats` kein `SET search_path` haben (unser PROJ-10-Funktionen haben es korrekt gesetzt) — vorbestehende Lücke, hier nur der Vollständigkeit halber vermerkt, kein PROJ-10-Bug
+
+### Bugs Found
+
+#### BUG-1: Zuweisungs-Trigger validiert `assignee_id` nicht gegen Team-Mitgliedschaft — bestätigter Informationsleck
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. Team-Mitglied A kennt (z. B. aus einem anderen Kontext) die User-ID einer beliebigen Person X, die **nicht** Mitglied des Teams ist
+  2. A weist eine Aufgabe des Teams per direktem API-Aufruf (unter Umgehung der UI-Dropdown-Einschränkung, die nur Team-Mitglieder zur Auswahl anbietet) `assignee_id = X` zu
+  3. Erwartet: Die Zuweisung wird abgelehnt, oder zumindest keine Benachrichtigung an X ausgelöst
+  4. Tatsächlich (bestätigt per SQL-Review): Die `UPDATE`-RLS-Policy auf `tasks` prüft nur, ob **A** (der Aktualisierende) Team-Mitglied ist (`USING is_team_member(...)`) — es gibt **keine `WITH CHECK`-Klausel**, die den neuen `assignee_id`-Wert selbst validiert. Der `notify_task_assignment`-Trigger prüft ebenfalls nicht, ob `new.assignee_id` Team-Mitglied ist, und legt anstandslos eine Benachrichtigung für X an — X erhält dadurch den Aufgaben-Titel und die Information, dass diese Aufgabe existiert, obwohl X keinerlei Zugriffsrecht auf das Team hat
+- **Root Cause:** Zwei zusammenwirkende Lücken: (1) `tasks.assignee_id` wird serverseitig nirgends auf tatsächliche Team-Mitglieder beschränkt — eine bereits in PROJ-4 angelegte, bisher folgenlose Lücke, da eine „falsche" Zuweisung vorher nur zu einer stillen Fehlanzeige führte; (2) PROJ-10s neuer Trigger vertraut `assignee_id` blind und macht die Lücke erstmals aktiv ausnutzbar (Informationsleck statt nur einer stillen Dateninkonsistenz)
+- **Priority:** Fix before deployment — Blocker
+
+#### BUG-2: Kein Fehler-Feedback beim Markieren als gelesen
+- **Severity:** Low
+- **Beobachtung:** Schlägt `markAsRead`/`markAllAsRead` in `use-notifications.ts` fehl, wird stillschweigend neu geladen (Rollback des optimistischen Updates) — anders als bei jedem anderen Feature im Projekt (Kommentare, Anhänge, Zeiterfassung) erscheint **kein** `toast.error(...)`. Der Nutzer bemerkt einen Fehlschlag nicht.
+- **Priority:** Nice to have
+
+#### BUG-3: Doppelter `auth.getUser()`-Aufruf auf der Startseite
+- **Severity:** Low
+- **Beobachtung:** `src/app/(main)/page.tsx` und `src/components/layout/app-header.tsx` laden unabhängig voneinander den eingeloggten Nutzer, statt sich einen gemeinsamen Zustand zu teilen (wie es für den Team-Zustand bereits sauber über `TeamProvider` gelöst wurde). Funktional harmlos, nur eine unnötige zusätzliche Anfrage pro Seitenaufruf.
+- **Priority:** Nice to have
+
+### Summary
+- **Acceptance Criteria:** 11/11 per Code-Review erfüllt
+- **Bugs Found:** 3 total (1 High **bestätigt und unbehoben**, 0 medium, 2 low)
+- **Security:** BUG-1 ist ein bestätigter Autorisierungs-/Informationsleck-Fehler, kein bloßer Verdacht — mit einer gezielten Abfrage der `tasks`-RLS-Policy verifiziert
+- **Production Ready:** NEIN — BUG-1 ist ein Blocker (High-Severity-Sicherheitslücke)
+- **Recommendation:** BUG-1 vor Deployment beheben — der `notify_task_assignment`-Trigger muss zusätzlich prüfen, dass `new.assignee_id` tatsächlich Mitglied des Teams ist (z. B. via `is_team_member()`, analog zum bestehenden Muster), bevor eine Benachrichtigung angelegt wird. Idealerweise zusätzlich die tieferliegende Lücke in PROJ-4 schließen (`WITH CHECK`-Klausel auf der `tasks`-UPDATE-Policy, die `assignee_id` gegen Team-Mitgliedschaft prüft) — das würde auch zukünftige, heute noch nicht vorhersehbare Folgeprobleme durch dieselbe Wurzelursache verhindern. Danach erneut `/qa` laufen lassen.
 
 ## Deployment
 _To be added by /deploy_
