@@ -19,7 +19,7 @@ Kleine Software-/Kreativ-Agenturteams (3–10 Personen), die mehrere Kundenproje
 | P1 | Kommentare zu Aufgaben | Deployed |
 | P1 | Dateianhänge an Aufgaben | Deployed |
 | P2 | Zeiterfassung | Deployed |
-| P2 | Reporting/Analytics-Dashboard | Roadmap |
+| P2 | Reporting/Analytics-Dashboard | Planned |
 | P2 | Benachrichtigungen | Roadmap |
 
 ## Success Metrics
