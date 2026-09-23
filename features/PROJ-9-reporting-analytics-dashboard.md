@@ -70,12 +70,42 @@ _Keine offenen Fragen — Umfang und Abgrenzung analog zu den bereits etablierte
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Eine einzige serverseitige Aggregations-Abfrage pro Dashboard-Aufruf statt vieler Einzelabfragen oder Rohdaten-Laden | Minimiert sowohl Ladezeit als auch Anzahl der Datenbank-Zugriffe pro Seitenaufruf — besonders wichtig angesichts der aktuellen Supabase-Zugriffsbeschränkung | 2026-09-23 |
+| Keine neue Tabelle, reine Aggregation bestehender Daten aus PROJ-3/PROJ-4/PROJ-8 | Das Dashboard braucht keine eigenen gespeicherten Werte, nur eine Zusammenfassung bereits vorhandener Daten | 2026-09-23 |
+| Zugriffsbeschränkung über dieselbe Team-Mitgliedschaftsregel wie bei Projekten/Aufgaben | Konsistentes, bereits bewährtes RLS-Muster, keine neue Berechtigungslogik nötig | 2026-09-23 |
+| Eigenständige neue Seite statt Umbau der bestehenden Projektübersicht | Ergänzt die bestehende Kartenansicht, statt sie zu ersetzen oder zu verkomplizieren; geringeres Risiko für Regressionen an einer bereits produktiv genutzten Seite | 2026-09-23 |
+| Keine Chart-Bibliothek, reine Tabellen-/Zahlendarstellung | Passt zum MVP-Scope (keine Diagramme laut Out of Scope), keine neue Abhängigkeit nötig | 2026-09-23 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+Projektübersicht (bestehend)
+└── Link „Dashboard anzeigen" (neu, führt zur neuen Dashboard-Seite)
+
+Dashboard-Seite (neu, eigene Route)
+├── Zurück-Link zur Projektübersicht
+├── Projekt-Tabelle
+│   └── Pro Projekt: Name, Aufgaben je Status (To Do/In Progress/Done), Anzahl überfällig, Gesamtzeit
+├── Leer-Zustand ("Noch keine Projekte in diesem Team")
+└── Lade-Zustand (Skeleton, während die Zahlen geladen werden)
+```
+
+### Data Model (plain language)
+Es wird keine neue Tabelle angelegt. Das Dashboard liest ausschließlich bereits vorhandene Daten aus (Projekte, Aufgaben, Zeiteinträge) und fasst sie zusammen. Dafür wird eine einzelne, fertig aggregierte Abfrage definiert, die für das aktuelle Team direkt die fertigen Zahlen liefert: pro Projekt die Anzahl der Aufgaben je Status, die Anzahl überfälliger Aufgaben und die insgesamt erfasste Zeit. Diese Abfrage prüft dieselbe Team-Mitgliedschaft wie alle anderen Bereiche der App, sodass ein Nutzer ausschließlich die Zahlen seines eigenen Teams sehen kann.
+
+### Tech Decisions
+- **Eine einzige serverseitige Aggregations-Abfrage pro Dashboard-Aufruf** statt vieler kleiner Einzelabfragen (z. B. eine pro Projekt) oder dem Laden aller einzelnen Aufgaben-/Zeiteintrag-Zeilen ins Frontend. Das hält sowohl die Ladezeit als auch die Anzahl der Datenbank-Zugriffe pro Seitenaufruf gering — besonders relevant, solange das Supabase-Kontingent geschont werden soll.
+- **Keine neue Tabelle** — reine Zusammenfassung bereits bestehender Daten aus Projekten (PROJ-3), Aufgaben (PROJ-4) und Zeiterfassung (PROJ-8).
+- **Zugriffsbeschränkung über dieselbe Team-Mitgliedschaftsregel** wie überall sonst im Projekt (Projekte, Aufgaben, Kommentare, Anhänge, Zeiterfassung).
+- **Neue, eigenständige Seite** für das Dashboard, erreichbar über einen Link von der bestehenden Projektübersicht aus — ergänzt die bestehende Kartenansicht, ersetzt sie nicht.
+- **Keine Chart-Bibliothek** — reine Tabellen-/Zahlendarstellung mit den bereits im Projekt vorhandenen shadcn/ui-Komponenten (passt zum Out-of-Scope-Punkt „keine Diagramme im MVP").
+
+### Dependencies
+Keine neuen npm-Pakete — reine Tabellen-/Textdarstellung mit bereits vorhandenen shadcn/ui-Komponenten, keine Chart-Bibliothek und keine Datei-Uploads nötig.
 
 ## QA Test Results
 _To be added by /qa_
