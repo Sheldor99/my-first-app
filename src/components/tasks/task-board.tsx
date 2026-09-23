@@ -27,6 +27,7 @@ import { DraggableTaskCard } from "@/components/tasks/draggable-task-card"
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog"
 import { DeleteTaskDialog } from "@/components/tasks/delete-task-dialog"
 import { TaskCommentsDialog } from "@/components/tasks/task-comments-dialog"
+import { TaskAttachmentsDialog } from "@/components/tasks/task-attachments-dialog"
 
 export interface Task {
   id: string
@@ -60,6 +61,8 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const [commentsTask, setCommentsTask] = useState<Task | null>(null)
+  const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({})
+  const [attachmentsTask, setAttachmentsTask] = useState<Task | null>(null)
   const { members } = useTeamMembers(teamId)
 
   const sensors = useSensors(
@@ -88,6 +91,27 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
     }
   }, [])
 
+  const fetchAttachmentCounts = useCallback(async (taskIds: string[]) => {
+    if (taskIds.length === 0) {
+      setAttachmentCounts({})
+      return
+    }
+
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("task_attachments")
+      .select("task_id")
+      .in("task_id", taskIds)
+
+    if (!error && data) {
+      const counts: Record<string, number> = {}
+      for (const row of data) {
+        counts[row.task_id] = (counts[row.task_id] ?? 0) + 1
+      }
+      setAttachmentCounts(counts)
+    }
+  }, [])
+
   const fetchTasks = useCallback(async () => {
     setIsLoading(true)
     const supabase = createClient()
@@ -101,9 +125,10 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
     if (!error && data) {
       setTasks(data)
       fetchCommentCounts(data.map((task) => task.id))
+      fetchAttachmentCounts(data.map((task) => task.id))
     }
     setIsLoading(false)
-  }, [projectId, fetchCommentCounts])
+  }, [projectId, fetchCommentCounts, fetchAttachmentCounts])
 
   useEffect(() => {
     fetchTasks()
@@ -173,6 +198,10 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
     setCommentCounts((current) => ({ ...current, [taskId]: count }))
   }, [])
 
+  const handleAttachmentsChanged = useCallback((taskId: string, count: number) => {
+    setAttachmentCounts((current) => ({ ...current, [taskId]: count }))
+  }, [])
+
   function handleDragStart(event: DragStartEvent) {
     const task = tasks.find((t) => t.id === event.active.id)
     setActiveTask(task ?? null)
@@ -240,10 +269,12 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
                       task={task}
                       members={members}
                       commentCount={commentCounts[task.id] ?? 0}
+                      attachmentCount={attachmentCounts[task.id] ?? 0}
                       onEdit={openEditDialog}
                       onDelete={setDeletingTask}
                       onStatusChange={updateTaskStatus}
                       onOpenComments={setCommentsTask}
+                      onOpenAttachments={setAttachmentsTask}
                     />
                   ))}
                 </TaskColumn>
@@ -282,6 +313,7 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
           if (!open) setDeletingTask(null)
         }}
         task={deletingTask}
+        teamId={teamId}
         onDeleted={handleDeleted}
       />
 
@@ -292,6 +324,16 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
         }}
         task={commentsTask}
         onCommentsChanged={handleCommentsChanged}
+      />
+
+      <TaskAttachmentsDialog
+        open={attachmentsTask !== null}
+        onOpenChange={(open) => {
+          if (!open) setAttachmentsTask(null)
+        }}
+        task={attachmentsTask}
+        teamId={teamId}
+        onAttachmentsChanged={handleAttachmentsChanged}
       />
     </div>
   )

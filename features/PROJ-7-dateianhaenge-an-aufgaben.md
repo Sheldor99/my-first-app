@@ -168,6 +168,36 @@ Alle Testdaten (Nutzer, Team, Projekt, Aufgabe, Anhang-Zeilen, Storage-Objekte) 
 - `proj7_task_attachments` — Tabelle, RLS-Policies, Index
 - `proj7_task_attachments_bucket` — Bucket-Eintrag + Storage-RLS-Policies
 
+## Frontend Implementation Notes
+
+### Komponenten
+- `src/lib/validations/attachment.ts` — Konstanten für maximale Dateigröße und erlaubte MIME-Typen (identisch zur Bucket-Konfiguration), `validateAttachmentFile()` für die clientseitige Vorab-Prüfung, `formatFileSize()` für die Anzeige
+- `src/hooks/use-task-attachments.ts` — lädt Anhänge einer Aufgabe inkl. Hochlader-E-Mail (Join über `profiles`), analog zu `use-task-comments.ts`
+- `src/components/tasks/task-attachments-dialog.tsx` — neuer Dialog: scrollbare Liste (`ScrollArea h-80`, von Anfang an begrenzt), Leer-Zustand, Upload-Button (verstecktes `<input type="file">`, per Klick ausgelöst), Download über `createSignedUrl()` (60 Sekunden gültig), Löschen-Menü nur für eigene Anhänge
+- `src/components/tasks/task-card.tsx` — neues Paperclip-Icon mit Anzahl-Badge neben dem bestehenden Kommentar-Icon, öffnet den Anhänge-Dialog (`onOpenAttachments`)
+- `src/components/tasks/draggable-task-card.tsx` — reicht `attachmentCount`/`onOpenAttachments` durch
+- `src/components/tasks/task-board.tsx` — lädt Anhang-Anzahl pro Aufgabe (`fetchAttachmentCounts`), verwaltet den geöffneten Anhänge-Dialog-State, aktualisiert die Anzahl nach Änderungen
+- `src/components/tasks/delete-task-dialog.tsx` — vor dem Löschen der Aufgabe werden zuerst alle Dateien unter `{teamId}/{taskId}/` im Storage-Bucket aufgelistet und entfernt (clientseitige Kaskade gemäß Architekturentscheidung), erst danach wird die Aufgabe selbst gelöscht
+
+### Upload-/Lösch-Ablauf
+- Upload: clientseitige Validierung (Größe, Typ) → `storage.upload()` mit Pfad `{teamId}/{taskId}/{uuid}-{dateiname}` → Metadaten-Insert in `task_attachments`; schlägt der Metadaten-Insert fehl, wird die bereits hochgeladene Datei wieder aus dem Storage entfernt, um keine verwaiste Datei zurückzulassen (Edge Case aus der Spec)
+- Löschen: zuerst Storage-Objekt entfernen, danach Metadaten-Zeile — beide Schritte über RLS-gesicherte Supabase-Client-Aufrufe, kein Sonderpfad nötig
+
+### Manuelles Testen (Browser)
+Mit einem echten, über den Signup-Flow erstellten Testkonto (E-Mail-Bestätigung per SQL umgangen) end-to-end verifiziert:
+- Datei hochladen → erscheint sofort in der Liste mit Dateiname, Hochlader-E-Mail, Größe, Zeitstempel ✓
+- Anzahl-Badge auf der Aufgaben-Karte aktualisiert sich korrekt (0 → 1) ✓
+- Download öffnet eine korrekt signierte, zeitlich begrenzte Storage-URL ✓
+- Löschen entfernt den Anhang aus der Liste; per SQL verifiziert, dass sowohl die Metadaten-Zeile als auch das Storage-Objekt tatsächlich entfernt wurden (nicht nur clientseitig ausgeblendet) ✓
+- Upload einer nicht erlaubten Datei (`.html`) wird clientseitig abgelehnt („Dateityp wird nicht unterstützt.") ✓
+- Leer-Zustand („Noch keine Anhänge") korrekt angezeigt, solange keine Anhänge existieren ✓
+
+Nicht end-to-end im Browser testbar: Upload einer >10-MB-Datei (Größenvalidierung ist in `validateAttachmentFile()` durch dieselbe Logik wie die Typ-Prüfung abgedeckt und serverseitig zusätzlich über das Bucket-Limit erzwungen, siehe Backend Implementation Notes).
+
+Alle Testdaten (Testkonto, Team, Projekt, Aufgabe) nach Abschluss vollständig entfernt und über Zählabfragen auf 0 verifiziert.
+
+`npx tsc --noEmit` und `npm run build` fehlerfrei.
+
 ## QA Test Results
 _To be added by /qa_
 

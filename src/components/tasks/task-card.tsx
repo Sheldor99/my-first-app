@@ -2,7 +2,7 @@
 
 import { forwardRef } from "react"
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core"
-import { GripVertical, MessageSquare, MoreVertical } from "lucide-react"
+import { GripVertical, MessageSquare, MoreVertical, Paperclip } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -45,10 +45,12 @@ interface TaskCardProps {
   task: Task
   members: TeamMemberProfile[]
   commentCount?: number
+  attachmentCount?: number
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void
   onStatusChange: (task: Task, status: TaskStatus) => void
   onOpenComments?: (task: Task) => void
+  onOpenAttachments?: (task: Task) => void
   dragHandleProps?: TaskCardDragHandleProps
   className?: string
   style?: React.CSSProperties
@@ -59,10 +61,12 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
     task,
     members,
     commentCount = 0,
+    attachmentCount = 0,
     onEdit,
     onDelete,
     onStatusChange,
     onOpenComments,
+    onOpenAttachments,
     dragHandleProps,
     className,
     style,
@@ -149,6 +153,20 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
               <MessageSquare className="h-4 w-4" />
               {commentCount > 0 && <span className="text-xs">{commentCount}</span>}
               <span className="sr-only">Kommentare</span>
+            </Button>
+          )}
+
+          {onOpenAttachments && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 gap-1 px-2 text-muted-foreground"
+              onClick={() => onOpenAttachments(task)}
+            >
+              <Paperclip className="h-4 w-4" />
+              {attachmentCount > 0 && <span className="text-xs">{attachmentCount}</span>}
+              <span className="sr-only">Anhänge</span>
             </Button>
           )}
         </div>

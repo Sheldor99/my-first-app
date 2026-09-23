@@ -20,10 +20,17 @@ interface DeleteTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   task: Task | null
+  teamId: string
   onDeleted: (taskId: string) => void
 }
 
-export function DeleteTaskDialog({ open, onOpenChange, task, onDeleted }: DeleteTaskDialogProps) {
+export function DeleteTaskDialog({
+  open,
+  onOpenChange,
+  task,
+  teamId,
+  onDeleted,
+}: DeleteTaskDialogProps) {
   const [isDeleting, setIsDeleting] = useState(false)
 
   async function handleDelete() {
@@ -32,6 +39,15 @@ export function DeleteTaskDialog({ open, onOpenChange, task, onDeleted }: Delete
 
     try {
       const supabase = createClient()
+
+      const attachmentFolder = `${teamId}/${task.id}`
+      const { data: files } = await supabase.storage.from("task-attachments").list(attachmentFolder)
+      if (files && files.length > 0) {
+        await supabase.storage
+          .from("task-attachments")
+          .remove(files.map((file) => `${attachmentFolder}/${file.name}`))
+      }
+
       const { error } = await supabase.from("tasks").delete().eq("id", task.id)
 
       if (error) {
