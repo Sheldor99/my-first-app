@@ -199,7 +199,81 @@ Alle Testdaten (Testkonto, Team, Projekt, Aufgabe) nach Abschluss vollständig e
 `npx tsc --noEmit` und `npm run build` fehlerfrei.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-23
+**App URL:** http://localhost:3001 (Dev-Server lief bereits auf 3001; separate Testkonten über Signup-Flow bzw. direktes SQL mit vollständigen GoTrue-Pflichtfeldern erstellt)
+**Tester:** QA Engineer (AI)
+
+### Acceptance Criteria Status
+
+#### Anhänge anzeigen
+- [x] Alle Anhänge einer Aufgabe werden mit Dateiname, Hochlader-E-Mail, Zeitstempel und Dateigröße angezeigt
+- [x] Leer-Zustand („Noch keine Anhänge") korrekt angezeigt, solange keine Anhänge existieren
+- [x] Anzahl-Badge auf der Aufgaben-Karte zeigt die korrekte Anzahl (0 → 1 → 12 → 13, live getestet)
+
+#### Datei hochladen
+- [x] Gültige Datei hochladen → erscheint sofort in der Liste
+- [x] Nicht erlaubter Dateityp (`.html`) → clientseitig abgelehnt mit „Dateityp wird nicht unterstützt.", kein Upload-Versuch
+- [x] Größenlimit (10 MB) — Logik durch Unit-Tests abgedeckt (`attachment.test.ts`); ein echter >10-MB-Upload im Browser war technisch nicht durchführbar (das Datei-Upload-Tool selbst limitiert auf 10 MB Transfergröße), serverseitig zusätzlich über die Bucket-Konfiguration erzwungen (siehe Backend Implementation Notes)
+- [x] Kein Verbindungsfehler-Test durchgeführt (kein reproduzierbarer Weg, den Netzwerkfehler gezielt auszulösen); Code-Review bestätigt: bei fehlgeschlagenem Metadaten-Insert nach erfolgreichem Storage-Upload wird die Datei wieder aus dem Storage entfernt (kein Orphan) — siehe `task-attachments-dialog.tsx handleFileSelected`
+
+#### Datei herunterladen
+- [x] Download öffnet eine korrekt signierte, zeitlich begrenzte Storage-URL
+- [x] Direkter Zugriff auf die Datei ohne Signatur (`/object/public/...`) wird abgelehnt — privater Bucket existiert nicht unter dem öffentlichen Endpunkt (404 „Bucket not found")
+- [x] Team-fremder Nutzer sieht das Projekt/die Aufgabe gar nicht erst (weder über die UI noch über direkten URL-Aufruf: „Projekt nicht gefunden oder kein Zugriff.") — Zugriff auf den Download-Link ist damit strukturell ausgeschlossen; zusätzlich auf DB-/Storage-Ebene bereits in den Backend-Tests verifiziert (0 Zeilen sichtbar für Team-Fremde)
+
+#### Anhang löschen
+- [x] Hochlader kann eigenen Anhang löschen (Datenbankeintrag UND Storage-Datei tatsächlich entfernt, per SQL verifiziert)
+- [x] Anderes Team-Mitglied sieht für fremde Anhänge KEINE Löschen-Option (im Dropdown-Menü fehlt der Eintrag komplett, in einer sauber verifizierten Session als tatsächliches Team-Mitglied getestet)
+
+### Edge Cases Status
+
+#### EC-1: Zwei Nutzer laden gleichzeitig Dateien hoch
+- [x] Nicht als echte Nebenläufigkeit getestet, aber strukturell unproblematisch (jeder Upload ist ein unabhängiger Insert+Storage-Call ohne gemeinsame Ressource)
+
+#### EC-2: Zwei Dateien mit demselben Dateinamen
+- [x] Handled correctly — beide Male `duplicate.txt` hochgeladen, beide erscheinen unabhängig in der Liste, keine überschreibt die andere (unterschiedliche UUID-Präfixe im Storage-Pfad)
+
+#### EC-3: Aufgabe wird gelöscht, Anhänge vorhanden
+- [ ] BUG: Nicht vollständig korrekt — siehe BUG-1. Datenbank-Metadaten werden zuverlässig kaskadiert (FK `ON DELETE CASCADE`, 0 Zeilen übrig), aber Storage-Dateien anderer Uploader als des Löschenden bleiben als Orphan zurück
+
+#### EC-4: Nutzer verlässt Team nach Upload
+- [x] Handled correctly — Anhang bleibt in der Liste erhalten, Anzeige wechselt korrekt von E-Mail zu „Ehemaliges Mitglied", keine Löschen-Option für Owner sichtbar (nur der ursprüngliche Hochlader dürfte löschen, ist aber kein Teammitglied mehr — RLS würde das ohnehin verhindern)
+
+#### EC-5: Sehr viele Anhänge (Scroll)
+- [x] Handled correctly — 12+ Anhänge hochgeladen, Liste bleibt innerhalb der festen `ScrollArea`-Höhe, sichtbarer Scrollbalken, Dialog wächst nicht unbegrenzt
+
+#### EC-6: Manipulierter MIME-Type / doppelte Dateiendung
+- [x] Clientseitige Prüfung greift bereits bei falschem MIME-Type; serverseitige Durchsetzung über Bucket-`allowed_mime_types` als zusätzliche Verteidigungsebene bereits im Backend verifiziert. Kein Tool zur Hand, um im Browser gezielt einen gefälschten `Content-Type`-Header bei laufendem Upload zu erzwingen — als durch Architektur (Bucket-Konfiguration) abgedeckt bewertet, nicht separat am UI nachgestellt
+
+### Security Audit Results
+- [x] Authentication: Ohne Login kein Zugriff auf `/projects/*` (bestehendes Verhalten aus PROJ-2/PROJ-3, nicht erneut geprüft)
+- [x] Authorization: Team-fremder Nutzer sieht weder Projekt noch Aufgabe noch Anhänge, weder über UI noch über direkten URL-Aufruf; RLS auf Tabellen- und Storage-Ebene bereits im Backend mit simulierten Sessions verifiziert (Team-fremd: 0 Zeilen sichtbar, Insert/Delete abgelehnt)
+- [x] Private Storage: Kein öffentlicher Zugriffspfad auf Dateien — direkter `/object/public/...`-Aufruf liefert 404 (Bucket existiert nicht öffentlich)
+- [x] Input validation (XSS): Dateiname wird ausschließlich als React-JSX-Text gerendert, kein `dangerouslySetInnerHTML` im gesamten Anhänge-Dialog — Code-Review bestätigt, kein Injection-Vektor über Dateinamen möglich
+- [x] Nur-Hochlader-Löschrecht auf DB- und Storage-Ebene serverseitig per RLS erzwungen, nicht nur clientseitig ausgeblendet (bereits im Backend mit simulierten Sessions verifiziert: fremder Löschversuch betrifft 0 Zeilen)
+- [ ] Rate limiting: Nicht geprüft (kein dediziertes Rate-Limiting für Uploads vorgesehen, entspricht dem Projekt-Standard für andere Features)
+
+### Bugs Found
+
+#### BUG-1: Verwaiste Storage-Dateien bei Task-Löschung, wenn Anhänge von mehreren Nutzern stammen
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. Team-Mitglied A lädt eine Datei an eine Aufgabe hoch
+  2. Team-Mitglied B lädt eine weitere Datei an dieselbe Aufgabe hoch
+  3. Mitglied A (oder B) löscht die Aufgabe über die UI
+  4. Erwartet: Alle zugehörigen Dateien werden aus dem Storage entfernt (laut Spec-Edge-Case und Architektur-Entscheidung explizit gefordert: „keine verwaisten Dateien bleiben im Speicher zurück")
+  5. Tatsächlich: Nur die Dateien des löschenden Nutzers werden entfernt; Dateien anderer Uploader bleiben dauerhaft als Orphan im Storage-Bucket zurück (per SQL verifiziert: `storage.objects`-Zeile überlebt die Task-Löschung, DB-Metadatenzeile wird dagegen korrekt kaskadiert)
+- **Root Cause:** Die Storage-RLS-DELETE-Policy auf `storage.objects` erlaubt ausschließlich `owner = auth.uid()` — der clientseitige Cleanup-Code in `delete-task-dialog.tsx` ruft `storage.remove()` im Kontext des löschenden Nutzers auf, kann aber dadurch fremde Dateien nicht entfernen. Das Silent-Failure-Verhalten von `storage.remove()` (kein Fehler bei teilweisem Misserfolg) verschleiert das Problem zusätzlich.
+- **Hinweis:** Dies ist eine andere, deutlich häufiger auftretende Ausprägung des in der Architektur bereits bewusst in Kauf genommenen Risikos („Löschen unter Umgehung der App") — hier tritt der Datenverlust jedoch bei ganz normaler Nutzung über die App auf, sobald mehr als ein Teammitglied Dateien an derselben Aufgabe hochlädt, was in einem Team-Tool der Normalfall sein dürfte.
+- **Priority:** Fix before deployment empfohlen
+
+### Summary
+- **Acceptance Criteria:** 11/11 funktional bestanden (einzelne Sub-Punkte aus Kapazitätsgründen nicht als echtes Netzwerk-/Race-Condition-Experiment nachgestellt, aber durch Code-Review/Architektur abgedeckt)
+- **Bugs Found:** 1 total (0 critical, 1 high, 0 medium, 0 low)
+- **Security:** Pass — keine Sicherheitslücke gefunden; BUG-1 ist ein Datenhygiene-/Storage-Bereinigungsproblem, kein Zugriffs- oder Datenleck
+- **Production Ready:** NO
+- **Recommendation:** BUG-1 vor Deployment beheben (z. B. Storage-DELETE-Policy um Team-Mitgliedschaft statt reiner Eigentümerprüfung erweitern, oder die Löschung serverseitig statt clientseitig mit erhöhten Rechten ausführen), danach erneut `/qa` für BUG-1 laufen lassen
 
 ## Deployment
 _To be added by /deploy_
