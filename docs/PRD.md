@@ -20,7 +20,7 @@ Kleine Software-/Kreativ-Agenturteams (3–10 Personen), die mehrere Kundenproje
 | P1 | Dateianhänge an Aufgaben | Deployed |
 | P2 | Zeiterfassung | Deployed |
 | P2 | Reporting/Analytics-Dashboard | Deployed |
-| P2 | Benachrichtigungen | Planned |
+| P2 | Benachrichtigungen | Deployed |
 
 ## Success Metrics
 - Ein Team kann in unter 5 Minuten ein Projekt anlegen und die erste Aufgabe zuweisen

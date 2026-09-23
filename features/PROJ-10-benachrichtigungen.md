@@ -1,6 +1,6 @@
 # PROJ-10: Benachrichtigungen
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -263,4 +263,31 @@ Der Nutzer bat um minimalen Supabase-Zugriff für diese QA-Runde. Diese Runde be
 - **Recommendation:** Deploy. Optional, nicht blockierend: die tieferliegende Lücke in PROJ-4 schließen (`WITH CHECK`-Klausel auf der `tasks`-UPDATE-Policy, die `assignee_id` gegen Team-Mitgliedschaft prüft) — der akute Informationsleck über Benachrichtigungen ist bereits geschlossen, aber `assignee_id` kann weiterhin auf beliebige User-IDs gesetzt werden, was bei zukünftigen Features erneut relevant werden könnte.
 
 ## Deployment
-_To be added by /deploy_
+**Deployed:** 2026-09-23
+**Art:** Lokales Deployment — kein Vercel-Deployment (Projektentscheidung, gilt für alle Features)
+
+### Pre-Deployment Checks
+- [x] `npm run build` erfolgreich (Turbopack, keine Fehler; Routen unverändert trotz `(main)`-Routen-Gruppe: `/`, `/dashboard`, `/projects/[id]`)
+- [ ] `npm run lint` — bekannte, vorbestehende Lücke im Template, nicht spezifisch für PROJ-10
+- [x] QA freigegeben (Status: Approved, BUG-1 behoben und live re-verifiziert, BUG-2/BUG-3 sind Low/nicht blockierend)
+- [x] Beide Migrationen bereits im Live-Supabase-Projekt angewendet (`proj10_notifications`, `proj10_fix_assignee_team_membership_check`) — für `/deploy` keine weitere Migration nötig
+- [x] Keine Secrets im Git-Verlauf committet
+- [x] Aller Code committet
+
+### Verifikation — über den Login-Check hinaus, da diese Runde einen bereichsübergreifenden Refactor enthält
+Anders als bei PROJ-8/PROJ-9 (reiner Login-Seiten-Check, 0 Supabase-Zugriffe) wurde für dieses Deployment ein **etwas tieferer** Live-Test als „notwendig" eingestuft: Der gemeinsame Layout-Header (`(main)/layout.tsx` + `AppHeader`) betrifft **alle** authentifizierten Seiten, nicht nur PROJ-10 selbst — ein reiner Login-Check hätte das Risiko einer Regression auf der Start-, Dashboard- oder Projektseite im Produktions-Build nicht abgedeckt.
+
+Mit einem echten Testkonto (Team + Projekt + Aufgabe) durchgeführt:
+- `npm run build` + `npm run start` auf Scratch-Port 3041
+- **Startseite** (`/`): gemeinsamer Header rendert korrekt (Team-Switcher, Dashboard-Link, Glocke, E-Mail, Logout)
+- **Dashboard** (`/dashboard`): Header inkl. Team-Switcher (bestätigt nebenbei den PROJ-9-BUG-2-Fix); `get_team_dashboard_stats` liefert im Produktions-Build erstmals live korrekte Zahlen (1 To Do, 0 sonst, 0 Std.) — schließt die in PROJ-9 offen gebliebene „nie live getestet"-Lücke für diese Funktion nebenbei
+- **Projektseite** (`/projects/[id]`): hat jetzt zum ersten Mal überhaupt einen Header (vorher keiner); Aufgaben-Board rendert korrekt mit allen drei Icons (Kommentare, Anhänge, Zeiterfassung)
+- Benachrichtigungs-Glocke geöffnet: Popover zeigt korrekt den Leer-Zustand („Keine Benachrichtigungen")
+- Keine Konsolenfehler auf allen drei Seiten
+- Alle Testdaten (1 Nutzer, Team, Projekt, Aufgabe) danach vollständig entfernt und auf 0 verifiziert
+- Produktions-Server danach gestoppt
+
+### Bookkeeping
+- Git-Tag `v1.10.0-PROJ-10` erstellt
+- `features/INDEX.md`: Status auf **Deployed** gesetzt
+- `docs/PRD.md`: Roadmap-Status auf **Deployed** gesetzt
