@@ -1,6 +1,6 @@
 # PROJ-7: Dateianhänge an Aufgaben
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -293,4 +293,27 @@ Alle Testdaten (Testkonto, Team, Projekt, Aufgabe) nach Abschluss vollständig e
 - **Recommendation:** Deploy — alle Akzeptanzkriterien bestanden, BUG-1 behoben und im Browser mit einem echten Mehrpersonen-Szenario re-verifiziert
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-23
+**Art:** Lokales Deployment — kein Vercel-Deployment (Projektentscheidung, gilt für alle Features)
+
+### Pre-Deployment Checks
+- [x] `npm run build` erfolgreich (Turbopack, keine Fehler)
+- [ ] `npm run lint` — bekannte, vorbestehende Lücke im Template (Next.js 16 hat `next lint` entfernt, ESLint-9-Flat-Config-Migration wurde projektweit noch nicht durchgeführt); nicht spezifisch für PROJ-7, betrifft alle Features gleichermaßen
+- [x] QA freigegeben (Status: Approved, BUG-1 behoben und re-verifiziert)
+- [x] Keine offenen Critical/High-Bugs
+- [x] Alle Migrationen bereits im Live-Supabase-Projekt angewendet (`proj7_task_attachments`, `proj7_task_attachments_bucket`, `proj7_fix_orphaned_attachment_files`)
+- [x] Keine Secrets im Git-Verlauf committet
+- [x] Aller Code committet
+
+### Verifikation (lokaler Produktions-Build)
+- `npm run build` + `npm run start` auf Scratch-Port 3015 gestartet
+- Mit einem echten Testkonto eingeloggt, Anhänge-Dialog geöffnet: Leer-Zustand korrekt, Datei-Upload erfolgreich, Anzeige mit Hochlader-E-Mail/Größe/Zeitstempel korrekt
+- Keine Fehler in der Browser-Konsole
+- Alle Testdaten (Nutzer, Team, Projekt, Aufgabe, Anhang) danach vollständig entfernt und über Zählabfragen auf 0 verifiziert
+- Produktions-Server nach Verifikation gestoppt
+
+### Bookkeeping
+- Git-Tag `v1.7.0-PROJ-7` erstellt
+- `features/INDEX.md`: Status auf **Deployed** gesetzt
+- `docs/PRD.md`: Roadmap-Status auf **Deployed** gesetzt
