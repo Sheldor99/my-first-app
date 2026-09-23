@@ -1,6 +1,6 @@
 # PROJ-8: Zeiterfassung
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -118,6 +118,22 @@ Die Gesamtdauer, die auf der Aufgaben-Karte angezeigt wird, ist kein eigenes ges
 
 ### Dependencies
 Keine neuen npm-Pakete — das Formular nutzt dieselben bereits vorhandenen Bibliotheken (react-hook-form, Zod) wie die übrigen Formulare im Projekt; es sind keine Datei-Uploads oder sonstigen Sonderfunktionen nötig.
+
+## Frontend Implementation Notes
+
+### Komponenten
+- `src/lib/validations/time-entry.ts` — Zod-Schema für Datum (nicht in der Zukunft) und Dauer (als String validiert, 0 < Dauer ≤ 24 Std.), `hoursToMinutes()`/`minutesToHours()` für die Umrechnung, `formatDuration()` für die Anzeige (z. B. „1,5 Std.")
+- `src/hooks/use-task-time-entries.ts` — lädt Zeiteinträge einer Aufgabe inkl. Ersteller-E-Mail (Join über `profiles`), analog zu `use-task-comments.ts`
+- `src/components/tasks/task-time-entries-dialog.tsx` — neuer Dialog: Formular „Zeit erfassen" (Datum, Stunden, optionale Notiz), scrollbare Liste (`ScrollArea h-80`, von Anfang an begrenzt), inline Bearbeiten-Formular (analog zu Kommentaren), Löschen-Menü nur für eigene Einträge, Gesamtdauer im Dialog-Titel
+- `src/components/tasks/task-card.tsx` — neues Uhr-Icon mit Gesamtdauer neben Kommentar-/Anhang-Icons, öffnet den Zeiterfassungs-Dialog (`onOpenTimeEntries`)
+- `src/components/tasks/draggable-task-card.tsx` — reicht `totalTimeMinutes`/`onOpenTimeEntries` durch
+- `src/components/tasks/task-board.tsx` — lädt Gesamtdauer pro Aufgabe (`fetchTotalTimeByTask`, Summe aus `task_time_entries`), verwaltet den geöffneten Dialog-State, aktualisiert die Summe nach Änderungen
+
+### Hinweis zur Implementierungsreihenfolge
+Diese Feature wurde mit `/frontend` vor `/backend` gebaut (Architektur war bereits abgeschlossen). Der Code referenziert die geplante Tabelle `task_time_entries` (Spalten: `id`, `task_id`, `user_id`, `entry_date`, `duration_minutes`, `note`, `created_at`, `updated_at`), die erst in `/backend` tatsächlich angelegt wird. `npx tsc --noEmit` und `npm run build` sind fehlerfrei, da der Supabase-Client in diesem Projekt ohne generierte Datenbank-Typen verwendet wird (`.from()`-Aufrufe sind zur Compile-Zeit nicht gegen das Schema geprüft). **Ein Browser-Test des Features ist erst nach `/backend` möglich**, wenn die Tabelle und RLS-Policies existieren.
+
+### Zod-Implementierungsdetail
+Die Dauer wird im Formular-Schema als `string` geführt (nicht `z.coerce.number()`), da Zod 4 in Kombination mit `@hookform/resolvers` bei coerzierten Feldern zu einem Typkonflikt zwischen Eingabe- und Ausgabetyp von `useForm` führt. Die Umwandlung in eine Zahl (`Number(values.hours)`) passiert explizit beim Absenden, vor dem Aufruf von `hoursToMinutes()`.
 
 ## QA Test Results
 _To be added by /qa_

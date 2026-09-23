@@ -14,11 +14,13 @@ interface DraggableTaskCardProps {
   members: TeamMemberProfile[]
   commentCount?: number
   attachmentCount?: number
+  totalTimeMinutes?: number
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void
   onStatusChange: (task: Task, status: TaskStatus) => void
   onOpenComments?: (task: Task) => void
   onOpenAttachments?: (task: Task) => void
+  onOpenTimeEntries?: (task: Task) => void
 }
 
 export function DraggableTaskCard({ task, ...rest }: DraggableTaskCardProps) {

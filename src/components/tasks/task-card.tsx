@@ -2,7 +2,7 @@
 
 import { forwardRef } from "react"
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core"
-import { GripVertical, MessageSquare, MoreVertical, Paperclip } from "lucide-react"
+import { Clock, GripVertical, MessageSquare, MoreVertical, Paperclip } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TASK_STATUSES, type TaskStatus } from "@/lib/validations/task"
+import { formatDuration } from "@/lib/validations/time-entry"
 import type { Task } from "@/components/tasks/task-board"
 import type { TeamMemberProfile } from "@/hooks/use-team-members"
 
@@ -46,11 +47,13 @@ interface TaskCardProps {
   members: TeamMemberProfile[]
   commentCount?: number
   attachmentCount?: number
+  totalTimeMinutes?: number
   onEdit: (task: Task) => void
   onDelete: (task: Task) => void
   onStatusChange: (task: Task, status: TaskStatus) => void
   onOpenComments?: (task: Task) => void
   onOpenAttachments?: (task: Task) => void
+  onOpenTimeEntries?: (task: Task) => void
   dragHandleProps?: TaskCardDragHandleProps
   className?: string
   style?: React.CSSProperties
@@ -62,11 +65,13 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
     members,
     commentCount = 0,
     attachmentCount = 0,
+    totalTimeMinutes = 0,
     onEdit,
     onDelete,
     onStatusChange,
     onOpenComments,
     onOpenAttachments,
+    onOpenTimeEntries,
     dragHandleProps,
     className,
     style,
@@ -167,6 +172,22 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
               <Paperclip className="h-4 w-4" />
               {attachmentCount > 0 && <span className="text-xs">{attachmentCount}</span>}
               <span className="sr-only">Anhänge</span>
+            </Button>
+          )}
+
+          {onOpenTimeEntries && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 gap-1 px-2 text-muted-foreground"
+              onClick={() => onOpenTimeEntries(task)}
+            >
+              <Clock className="h-4 w-4" />
+              {totalTimeMinutes > 0 && (
+                <span className="text-xs">{formatDuration(totalTimeMinutes)}</span>
+              )}
+              <span className="sr-only">Zeiterfassung</span>
             </Button>
           )}
         </div>

@@ -28,6 +28,7 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog"
 import { DeleteTaskDialog } from "@/components/tasks/delete-task-dialog"
 import { TaskCommentsDialog } from "@/components/tasks/task-comments-dialog"
 import { TaskAttachmentsDialog } from "@/components/tasks/task-attachments-dialog"
+import { TaskTimeEntriesDialog } from "@/components/tasks/task-time-entries-dialog"
 
 export interface Task {
   id: string
@@ -63,6 +64,8 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
   const [commentsTask, setCommentsTask] = useState<Task | null>(null)
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({})
   const [attachmentsTask, setAttachmentsTask] = useState<Task | null>(null)
+  const [totalTimeByTask, setTotalTimeByTask] = useState<Record<string, number>>({})
+  const [timeEntriesTask, setTimeEntriesTask] = useState<Task | null>(null)
   const { members } = useTeamMembers(teamId)
 
   const sensors = useSensors(
@@ -112,6 +115,27 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
     }
   }, [])
 
+  const fetchTotalTimeByTask = useCallback(async (taskIds: string[]) => {
+    if (taskIds.length === 0) {
+      setTotalTimeByTask({})
+      return
+    }
+
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("task_time_entries")
+      .select("task_id, duration_minutes")
+      .in("task_id", taskIds)
+
+    if (!error && data) {
+      const totals: Record<string, number> = {}
+      for (const row of data) {
+        totals[row.task_id] = (totals[row.task_id] ?? 0) + row.duration_minutes
+      }
+      setTotalTimeByTask(totals)
+    }
+  }, [])
+
   const fetchTasks = useCallback(async () => {
     setIsLoading(true)
     const supabase = createClient()
@@ -126,9 +150,10 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
       setTasks(data)
       fetchCommentCounts(data.map((task) => task.id))
       fetchAttachmentCounts(data.map((task) => task.id))
+      fetchTotalTimeByTask(data.map((task) => task.id))
     }
     setIsLoading(false)
-  }, [projectId, fetchCommentCounts, fetchAttachmentCounts])
+  }, [projectId, fetchCommentCounts, fetchAttachmentCounts, fetchTotalTimeByTask])
 
   useEffect(() => {
     fetchTasks()
@@ -202,6 +227,10 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
     setAttachmentCounts((current) => ({ ...current, [taskId]: count }))
   }, [])
 
+  const handleTotalTimeChanged = useCallback((taskId: string, totalMinutes: number) => {
+    setTotalTimeByTask((current) => ({ ...current, [taskId]: totalMinutes }))
+  }, [])
+
   function handleDragStart(event: DragStartEvent) {
     const task = tasks.find((t) => t.id === event.active.id)
     setActiveTask(task ?? null)
@@ -270,11 +299,13 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
                       members={members}
                       commentCount={commentCounts[task.id] ?? 0}
                       attachmentCount={attachmentCounts[task.id] ?? 0}
+                      totalTimeMinutes={totalTimeByTask[task.id] ?? 0}
                       onEdit={openEditDialog}
                       onDelete={setDeletingTask}
                       onStatusChange={updateTaskStatus}
                       onOpenComments={setCommentsTask}
                       onOpenAttachments={setAttachmentsTask}
+                      onOpenTimeEntries={setTimeEntriesTask}
                     />
                   ))}
                 </TaskColumn>
@@ -334,6 +365,15 @@ export function TaskBoard({ projectId, teamId }: TaskBoardProps) {
         task={attachmentsTask}
         teamId={teamId}
         onAttachmentsChanged={handleAttachmentsChanged}
+      />
+
+      <TaskTimeEntriesDialog
+        open={timeEntriesTask !== null}
+        onOpenChange={(open) => {
+          if (!open) setTimeEntriesTask(null)
+        }}
+        task={timeEntriesTask}
+        onTotalChanged={handleTotalTimeChanged}
       />
     </div>
   )
