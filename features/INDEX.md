@@ -21,7 +21,7 @@
 | PROJ-4 | Aufgaben (Tasks): Status, Zuweisung, Fälligkeitsdatum | P0 | PROJ-1, PROJ-3 | Deployed | [PROJ-4](PROJ-4-aufgaben-tasks.md) | 2026-09-18 |
 | PROJ-5 | Kanban-Board-Ansicht pro Projekt | P0 | PROJ-1, PROJ-4 | Deployed | [PROJ-5](PROJ-5-kanban-board-ansicht.md) | 2026-09-18 |
 | PROJ-6 | Kommentare zu Aufgaben | P1 | PROJ-1, PROJ-4 | Deployed | [PROJ-6](PROJ-6-kommentare-zu-aufgaben.md) | 2026-09-18 |
-| PROJ-7 | Dateianhänge an Aufgaben | P1 | PROJ-1, PROJ-4 | In Review | [PROJ-7](PROJ-7-dateianhaenge-an-aufgaben.md) | 2026-09-18 |
+| PROJ-7 | Dateianhänge an Aufgaben | P1 | PROJ-1, PROJ-4 | Approved | [PROJ-7](PROJ-7-dateianhaenge-an-aufgaben.md) | 2026-09-18 |
 | PROJ-8 | Zeiterfassung | P2 | PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-9 | Reporting/Analytics-Dashboard | P2 | PROJ-3, PROJ-4 | Roadmap | - | 2026-09-18 |
 | PROJ-10 | Benachrichtigungen | P2 | PROJ-4, PROJ-6 | Roadmap | - | 2026-09-18 |

@@ -1,6 +1,6 @@
 # PROJ-7: Dateianhänge an Aufgaben
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -250,7 +250,7 @@ Alle Testdaten (Testkonto, Team, Projekt, Aufgabe) nach Abschluss vollständig e
 - [x] Handled correctly — beide Male `duplicate.txt` hochgeladen, beide erscheinen unabhängig in der Liste, keine überschreibt die andere (unterschiedliche UUID-Präfixe im Storage-Pfad)
 
 #### EC-3: Aufgabe wird gelöscht, Anhänge vorhanden
-- [ ] BUG: Nicht vollständig korrekt — siehe BUG-1. Datenbank-Metadaten werden zuverlässig kaskadiert (FK `ON DELETE CASCADE`, 0 Zeilen übrig), aber Storage-Dateien anderer Uploader als des Löschenden bleiben als Orphan zurück
+- [x] Handled correctly (nach Fix von BUG-1) — Re-Test: Zwei echte Team-Mitglieder (Owner + Mitglied) laden je eine Datei an dieselbe Aufgabe hoch, das Mitglied löscht anschließend die Aufgabe über die UI. Datenbank-Metadaten kaskadieren zuverlässig (FK `ON DELETE CASCADE`), UND beide Storage-Dateien (eigene sowie die des anderen Uploaders) wurden nachweislich entfernt — 0 verbleibende `storage.objects`-Zeilen per SQL verifiziert
 
 #### EC-4: Nutzer verlässt Team nach Upload
 - [x] Handled correctly — Anhang bleibt in der Liste erhalten, Anzeige wechselt korrekt von E-Mail zu „Ehemaliges Mitglied", keine Löschen-Option für Owner sichtbar (nur der ursprüngliche Hochlader dürfte löschen, ist aber kein Teammitglied mehr — RLS würde das ohnehin verhindern)
@@ -282,13 +282,15 @@ Alle Testdaten (Testkonto, Team, Projekt, Aufgabe) nach Abschluss vollständig e
 - **Root Cause:** Die Storage-RLS-DELETE-Policy auf `storage.objects` erlaubt ausschließlich `owner = auth.uid()` — der clientseitige Cleanup-Code in `delete-task-dialog.tsx` ruft `storage.remove()` im Kontext des löschenden Nutzers auf, kann aber dadurch fremde Dateien nicht entfernen. Das Silent-Failure-Verhalten von `storage.remove()` (kein Fehler bei teilweisem Misserfolg) verschleiert das Problem zusätzlich.
 - **Hinweis:** Dies ist eine andere, deutlich häufiger auftretende Ausprägung des in der Architektur bereits bewusst in Kauf genommenen Risikos („Löschen unter Umgehung der App") — hier tritt der Datenverlust jedoch bei ganz normaler Nutzung über die App auf, sobald mehr als ein Teammitglied Dateien an derselben Aufgabe hochlädt, was in einem Team-Tool der Normalfall sein dürfte.
 - **Priority:** Fix before deployment empfohlen
+- **Status:** ✅ Fixed — siehe „Bugfix-Runde" oben (Migration `proj7_fix_orphaned_attachment_files` + Reihenfolge-Fix in `delete-task-dialog.tsx`)
+- **Re-Test (2026-09-23):** Mit zwei echten, über den Signup-Flow bzw. per SQL erstellten Team-Mitgliedern im Browser nachgestellt: Owner lädt eine Datei hoch, Mitglied lädt eine zweite Datei an dieselbe Aufgabe hoch, Mitglied löscht die Aufgabe über die UI. Ergebnis: 0 verbleibende `storage.objects`-Zeilen — beide Dateien vollständig entfernt, unabhängig davon, wer sie ursprünglich hochgeladen hat. Zusätzlich erneut verifiziert: Ein Team-Mitglied kann weiterhin nicht die *lebende* Datei eines anderen Mitglieds löschen (Sicherheitsanforderung bleibt intakt), und ein Team-fremder Nutzer kann auch keine verwaiste Datei eines fremden Teams löschen.
 
 ### Summary
 - **Acceptance Criteria:** 11/11 funktional bestanden (einzelne Sub-Punkte aus Kapazitätsgründen nicht als echtes Netzwerk-/Race-Condition-Experiment nachgestellt, aber durch Code-Review/Architektur abgedeckt)
-- **Bugs Found:** 1 total (0 critical, 1 high, 0 medium, 0 low)
-- **Security:** Pass — keine Sicherheitslücke gefunden; BUG-1 ist ein Datenhygiene-/Storage-Bereinigungsproblem, kein Zugriffs- oder Datenleck
-- **Production Ready:** NO
-- **Recommendation:** BUG-1 vor Deployment beheben (z. B. Storage-DELETE-Policy um Team-Mitgliedschaft statt reiner Eigentümerprüfung erweitern, oder die Löschung serverseitig statt clientseitig mit erhöhten Rechten ausführen), danach erneut `/qa` für BUG-1 laufen lassen
+- **Bugs Found:** 1 total, 1 fixed und re-verifiziert (0 critical, 0 high offen, 0 medium, 0 low)
+- **Security:** Pass — keine Sicherheitslücke gefunden; BUG-1 war ein Datenhygiene-/Storage-Bereinigungsproblem, kein Zugriffs- oder Datenleck, und ist behoben
+- **Production Ready:** YES
+- **Recommendation:** Deploy — alle Akzeptanzkriterien bestanden, BUG-1 behoben und im Browser mit einem echten Mehrpersonen-Szenario re-verifiziert
 
 ## Deployment
 _To be added by /deploy_
