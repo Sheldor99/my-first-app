@@ -1,6 +1,6 @@
 # PROJ-9: Reporting/Analytics-Dashboard
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -169,7 +169,72 @@ Auf ausdrücklichen Wunsch des Nutzers wurde für PROJ-9 **kein** Live-Test durc
 **Bekannte Lücke:** Die Funktion selbst (insbesondere die `overdue_count`-Logik und die korrekte Summenbildung bei mehreren Zeiteinträgen pro Aufgabe) wurde nicht live mit echten Daten ausgeführt. Sollte in der QA-Phase Supabase-Zugriff wieder unproblematisch sein, sollte dort mindestens ein einmaliger Aufruf mit echten Testdaten (mehrere Projekte, gemischte Status, überfällige und nicht-überfällige Aufgaben, mehrere Zeiteinträge pro Aufgabe) erfolgen, um die Aggregationslogik zu bestätigen.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-23
+**App URL:** Kein Browser-Test durchgeführt (siehe unten) — Verifikation ausschließlich per Code-Review
+**Tester:** QA Engineer (AI)
+
+### Hinweis zur Vorgehensweise (explizite Nutzeranfrage)
+Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf **0 Zugriffe** zu reduzieren. Anders als bei PROJ-8 (wo ein minimaler Live-Smoke-Test genehmigt wurde) hat sich der Nutzer diesmal explizit für die Variante ohne jeden Live-Test entschieden, obwohl ihm das Restrisiko genannt wurde. Diese QA-Runde besteht daher ausschließlich aus:
+- Code-Review jeder Komponente/Funktion gegen jedes Akzeptanzkriterium und jeden Edge Case
+- Ausführen der bestehenden Vitest-Suite (lokal, kein Supabase-Zugriff)
+- Kein Playwright-E2E (in dieser Umgebung ohnehin bereits vorher als defekt bekannt, unabhängig vom Supabase-Thema)
+
+**Konsequenz:** Die eigentliche SQL-Aggregationslogik der Funktion `get_team_dashboard_stats` (Status-Zählungen, Überfällig-Berechnung, Zeit-Summierung über mehrere Einträge) wurde zu keinem Zeitpunkt mit echten Daten ausgeführt — weder in `/backend` noch hier. Die Bewertung „funktioniert korrekt" stützt sich ausschließlich auf sorgfältiges Lesen der SQL, nicht auf einen empirischen Beweis.
+
+### Acceptance Criteria Status (alle per Code-Review)
+
+#### Dashboard anzeigen
+- [x] Projekte mit Status-Zahlen, überfällig, Gesamtzeit — Code-Review: SQL-Funktion liefert exakt diese Felder, Tabelle zeigt sie an
+- [x] Leer-Zustand bei Team ohne Projekte — Code-Review: `stats.length === 0` zeigt Leer-Zustand; SQL liefert bei einem Team ohne Projekte-Zeilen korrekt ein leeres Array
+- [x] Projekt ohne Aufgaben/Zeiteinträge zeigt überall 0 — Code-Review der SQL: `LEFT JOIN tasks` + `count(*) filter(...)` ergibt 0 bei fehlenden Aufgaben (kein NULL); `coalesce(sum(...), 0)` verhindert NULL bei fehlenden Zeiteinträgen
+
+#### Zugriff
+- [x] Team-fremder Nutzer wird verweigert — Code-Review: Funktion ist `SECURITY INVOKER`, RLS auf `projects`/`tasks` (bereits in PROJ-3/PROJ-4 verifiziert) liefert für ein fremdes Team strukturell keine Zeilen
+- [x] Nicht eingeloggt → Redirect zu Login — Code-Review: globale Middleware (`src/proxy.ts`) schützt automatisch jeden nicht-öffentlichen Pfad, `/dashboard` eingeschlossen
+
+#### Aktualität
+- [x] Zahlen spiegeln aktuellen Stand nach Neuladen wider — Code-Review: Hook lädt bei jedem Mount/Team-Wechsel neu, kein zwischengespeicherter veralteter Zustand
+
+### Edge Cases Status
+- [ ] BUG: Viele Projekte (>20) → siehe BUG-1, Tabelle ist nicht auf einen scrollbaren Bereich begrenzt
+- [x] Projekt gelöscht während Dashboard offen → Code-Review: kein Echtzeit-Update erwartet (laut Spec), verschwindet beim nächsten Neuladen einfach aus der Abfrage
+- [ ] BUG: Team-Wechsel während Dashboard offen → siehe BUG-2, kein Team-Switcher auf dieser Seite vorhanden
+- [x] Aufgabe überfällig UND „Done" zählt nicht als überfällig — Code-Review der SQL: `and t.status <> 'done'` in der Filter-Bedingung
+
+### Security Audit Results
+- [x] Authorization: strukturelle Absicherung durch `SECURITY INVOKER` + bereits verifizierte RLS (nicht live erneut getestet, siehe Bekannte Lücke im Backend-Abschnitt)
+- [x] Input validation (XSS): `project_name` wird ausschließlich als React-JSX-Text gerendert, kein `dangerouslySetInnerHTML`
+- [x] Keine SQL-Injection-Gefahr: `p_team_id` ist ein typisiertes `uuid`-Funktionsargument, keine String-Konkatenation
+- [ ] Rate limiting: nicht geprüft (entspricht dem Projekt-Standard)
+
+### Bugs Found
+
+#### BUG-1: Projekt-Tabelle im Dashboard ist nicht scrollbar begrenzt
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Ein Team hat sehr viele Projekte (z. B. 25)
+  2. Nutzer öffnet `/dashboard`
+  3. Erwartet (laut Spec-Edge-Case, explizit aus der PROJ-6-Lehre übernommen): Die Liste scrollt innerhalb eines begrenzten Bereichs
+  4. Tatsächlich: `src/app/dashboard/page.tsx` rendert die `Table` ohne umschließende `ScrollArea` oder Höhenbegrenzung — die Seite wächst unbegrenzt in die Länge
+- **Priority:** Fix before deployment empfohlen — genau dieses Muster wurde nach dem PROJ-6-Bug in jeder Folge-Feature-Spec als Pflichtanforderung aufgenommen, hier aber bei der Frontend-Umsetzung übersehen
+
+#### BUG-2: Kein Team-Switcher auf der Dashboard-Seite
+- **Severity:** Low
+- **Beobachtung:** Die Dashboard-Seite zeigt nur einen „Zurück"-Link, aber keinen Team-Switcher. Der in der Spec beschriebene Edge Case „Nutzer wechselt das Team über den Team-Switcher, während das Dashboard offen ist" kann auf dieser Seite so nicht direkt stattfinden — der Nutzer muss zurück zur Startseite navigieren, dort das Team wechseln und dann erneut zum Dashboard gehen.
+- **Priority:** Nice to have — funktional kein Blocker (der Umweg funktioniert), aber weicht vom in der Spec beschriebenen Ablauf ab
+
+#### BUG-3: Irreführender Leer-Zustand, wenn der Nutzer gar kein Team hat
+- **Severity:** Low
+- **Beobachtung:** Ruft ein Nutzer ohne jedes Team `/dashboard` direkt auf (z. B. per Lesezeichen), zeigt die Seite „Noch keine Projekte in diesem Team" an — es existiert aber gar kein Team. Die Startseite (`/`) behandelt diesen Fall korrekt mit einem eigenen „Team erstellen"-Formular, das Dashboard nicht.
+- **Priority:** Nice to have — seltener Randfall (Direktaufruf ohne je ein Team erstellt zu haben), nicht Teil der ursprünglichen Spec-Edge-Cases
+
+### Summary
+- **Acceptance Criteria:** 7/7 per Code-Review erfüllt
+- **Bugs Found:** 3 total (0 critical, 0 high, 1 medium, 2 low)
+- **Security:** Keine Sicherheitslücke identifiziert; Autorisierung stützt sich auf bereits andernorts verifizierte RLS, wurde für PROJ-9 selbst nicht live bestätigt
+- **Production Ready:** JA, mit deutlichem Vorbehalt — kein Critical/High-Bug, aber die komplette Aggregationslogik der Datenbankfunktion wurde nie mit echten Daten ausgeführt. Diese Einschätzung beruht ausschließlich auf Code-Review, nicht auf empirischer Bestätigung.
+- **Recommendation:** Vor dem produktiven Verlassen auf die angezeigten Zahlen empfiehlt sich, dass der Nutzer selbst einmal kurz mit echten Projektdaten durch das Dashboard klickt, sobald Supabase-Zugriff wieder unproblematisch ist. BUG-1 (fehlende Scrollbegrenzung) sollte vor dem nächsten größeren Team-Wachstum behoben werden, ist aber kein Blocker für dieses Deployment.
 
 ## Deployment
 _To be added by /deploy_
