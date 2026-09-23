@@ -218,6 +218,7 @@ Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf
   3. Erwartet (laut Spec-Edge-Case, explizit aus der PROJ-6-Lehre übernommen): Die Liste scrollt innerhalb eines begrenzten Bereichs
   4. Tatsächlich: `src/app/dashboard/page.tsx` rendert die `Table` ohne umschließende `ScrollArea` oder Höhenbegrenzung — die Seite wächst unbegrenzt in die Länge
 - **Priority:** Fix before deployment empfohlen — genau dieses Muster wurde nach dem PROJ-6-Bug in jeder Folge-Feature-Spec als Pflichtanforderung aufgenommen, hier aber bei der Frontend-Umsetzung übersehen
+- **Status:** ✅ Fixed — `src/app/dashboard/page.tsx` umschließt die `Table` jetzt mit `<ScrollArea className="max-h-[65vh] rounded-md border">`, analog zum bereits bewährten Muster aus PROJ-6/7/8. `npx tsc --noEmit` und `npm run build` liefen danach fehlerfrei (0 Supabase-Zugriffe für den Fix). **Nicht visuell im Browser bestätigt** — auf ausdrücklichen Wunsch des Nutzers (Supabase minimal), da ein sichtbarer Scroll-Effekt echte Testdaten mit vielen Projekten voraussetzen würde.
 
 #### BUG-2: Kein Team-Switcher auf der Dashboard-Seite
 - **Severity:** Low
@@ -231,10 +232,10 @@ Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf
 
 ### Summary
 - **Acceptance Criteria:** 7/7 per Code-Review erfüllt
-- **Bugs Found:** 3 total (0 critical, 0 high, 1 medium, 2 low)
+- **Bugs Found:** 3 total (0 critical, 0 high, 1 medium behoben, 2 low offen/nicht blockierend)
 - **Security:** Keine Sicherheitslücke identifiziert; Autorisierung stützt sich auf bereits andernorts verifizierte RLS, wurde für PROJ-9 selbst nicht live bestätigt
-- **Production Ready:** JA, mit deutlichem Vorbehalt — kein Critical/High-Bug, aber die komplette Aggregationslogik der Datenbankfunktion wurde nie mit echten Daten ausgeführt. Diese Einschätzung beruht ausschließlich auf Code-Review, nicht auf empirischer Bestätigung.
-- **Recommendation:** Vor dem produktiven Verlassen auf die angezeigten Zahlen empfiehlt sich, dass der Nutzer selbst einmal kurz mit echten Projektdaten durch das Dashboard klickt, sobald Supabase-Zugriff wieder unproblematisch ist. BUG-1 (fehlende Scrollbegrenzung) sollte vor dem nächsten größeren Team-Wachstum behoben werden, ist aber kein Blocker für dieses Deployment.
+- **Production Ready:** JA, mit Vorbehalt — kein Critical/High-Bug, BUG-1 behoben (nicht visuell bestätigt). Die komplette Aggregationslogik der Datenbankfunktion wurde nie mit echten Daten ausgeführt. Diese Einschätzung beruht ausschließlich auf Code-Review, nicht auf empirischer Bestätigung.
+- **Recommendation:** Deploy. Vor dem produktiven Verlassen auf die angezeigten Zahlen empfiehlt sich, dass der Nutzer selbst einmal kurz mit echten Projektdaten durch das Dashboard klickt, sobald Supabase-Zugriff wieder unproblematisch ist. BUG-2/BUG-3 sind nicht blockierend und können später aufgegriffen werden.
 
 ## Deployment
 _To be added by /deploy_

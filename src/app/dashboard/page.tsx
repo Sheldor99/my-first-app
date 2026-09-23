@@ -8,6 +8,7 @@ import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 import { formatDuration } from "@/lib/validations/time-entry"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Table,
   TableBody,
@@ -56,39 +57,41 @@ export default function DashboardPage() {
             </Button>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Projekt</TableHead>
-                <TableHead className="text-right">To Do</TableHead>
-                <TableHead className="text-right">In Progress</TableHead>
-                <TableHead className="text-right">Done</TableHead>
-                <TableHead className="text-right">Überfällig</TableHead>
-                <TableHead className="text-right">Gesamtzeit</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats.map((project) => (
-                <TableRow key={project.project_id}>
-                  <TableCell className="font-medium">{project.project_name}</TableCell>
-                  <TableCell className="text-right">{project.todo_count}</TableCell>
-                  <TableCell className="text-right">{project.in_progress_count}</TableCell>
-                  <TableCell className="text-right">{project.done_count}</TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right",
-                      project.overdue_count > 0 && "font-semibold text-destructive"
-                    )}
-                  >
-                    {project.overdue_count}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatDuration(project.total_minutes)}
-                  </TableCell>
+          <ScrollArea className="max-h-[65vh] rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Projekt</TableHead>
+                  <TableHead className="text-right">To Do</TableHead>
+                  <TableHead className="text-right">In Progress</TableHead>
+                  <TableHead className="text-right">Done</TableHead>
+                  <TableHead className="text-right">Überfällig</TableHead>
+                  <TableHead className="text-right">Gesamtzeit</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {stats.map((project) => (
+                  <TableRow key={project.project_id}>
+                    <TableCell className="font-medium">{project.project_name}</TableCell>
+                    <TableCell className="text-right">{project.todo_count}</TableCell>
+                    <TableCell className="text-right">{project.in_progress_count}</TableCell>
+                    <TableCell className="text-right">{project.done_count}</TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right",
+                        project.overdue_count > 0 && "font-semibold text-destructive"
+                      )}
+                    >
+                      {project.overdue_count}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatDuration(project.total_minutes)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         )}
       </main>
     </div>
