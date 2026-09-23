@@ -1,6 +1,6 @@
 # PROJ-10: Benachrichtigungen
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -180,6 +180,7 @@ Beide Funktionen lesen `auth.uid()` innerhalb der Trigger-Funktion, um den Hande
 
 ### Migration
 - `proj10_notifications` — ein einziger Migrationsaufruf: Tabelle, RLS-Policies, Index, beide Trigger-Funktionen und Trigger
+- `proj10_fix_assignee_team_membership_check` — Bugfix-Migration aus der QA-Runde (siehe QA Test Results, BUG-1): ersetzt `notify_task_assignment()` um eine Team-Mitgliedschaftsprüfung für `new.assignee_id`
 
 ### Verifikation — auf Code-Review reduziert (explizite Nutzeranfrage)
 Auf ausdrücklichen Wunsch des Nutzers wurde **kein** Live-Test durchgeführt — der gesamte Backend-Schritt bestand aus einem einzigen `apply_migration`-Aufruf. Die Korrektheit stützt sich auf:
@@ -225,7 +226,7 @@ Der Nutzer bat um minimalen Supabase-Zugriff für diese QA-Runde. Diese Runde be
 ### Security Audit Results
 - [x] RLS SELECT/UPDATE auf `notifications`: `recipient_id = auth.uid()` — Code-Review, nicht live mit zwei echten Nutzern getestet (siehe bekannte Lücke aus `/backend`)
 - [x] XSS: `notificationText()` wird als reiner JSX-Text gerendert, kein `dangerouslySetInnerHTML`
-- [ ] **BUG-1 (siehe unten): Bestätigter Autorisierungs-Fehler — Zuweisungs-Trigger validiert `assignee_id` nicht gegen Team-Mitgliedschaft**
+- [x] **BUG-1 (siehe unten): behoben und live re-verifiziert**
 - [x] `get_advisors(type: "security")` geprüft: `notify_task_assignment`/`notify_task_comment` sind laut Linter theoretisch per RPC aufrufbar (`anon`/`authenticated`) — praktisch ungefährlich, da Postgres Funktionen mit `RETURNS trigger` außerhalb eines echten Trigger-Kontexts grundsätzlich nicht direkt ausführen lässt (Fehler „trigger functions can only be called as triggers")
 - Nebenbefund (nicht PROJ-10 zuzurechnen): `get_advisors` zeigt, dass die PROJ-8/PROJ-9-Funktionen `reject_future_time_entry_date` und `get_team_dashboard_stats` kein `SET search_path` haben (unser PROJ-10-Funktionen haben es korrekt gesetzt) — vorbestehende Lücke, hier nur der Vollständigkeit halber vermerkt, kein PROJ-10-Bug
 
@@ -240,6 +241,9 @@ Der Nutzer bat um minimalen Supabase-Zugriff für diese QA-Runde. Diese Runde be
   4. Tatsächlich (bestätigt per SQL-Review): Die `UPDATE`-RLS-Policy auf `tasks` prüft nur, ob **A** (der Aktualisierende) Team-Mitglied ist (`USING is_team_member(...)`) — es gibt **keine `WITH CHECK`-Klausel**, die den neuen `assignee_id`-Wert selbst validiert. Der `notify_task_assignment`-Trigger prüft ebenfalls nicht, ob `new.assignee_id` Team-Mitglied ist, und legt anstandslos eine Benachrichtigung für X an — X erhält dadurch den Aufgaben-Titel und die Information, dass diese Aufgabe existiert, obwohl X keinerlei Zugriffsrecht auf das Team hat
 - **Root Cause:** Zwei zusammenwirkende Lücken: (1) `tasks.assignee_id` wird serverseitig nirgends auf tatsächliche Team-Mitglieder beschränkt — eine bereits in PROJ-4 angelegte, bisher folgenlose Lücke, da eine „falsche" Zuweisung vorher nur zu einer stillen Fehlanzeige führte; (2) PROJ-10s neuer Trigger vertraut `assignee_id` blind und macht die Lücke erstmals aktiv ausnutzbar (Informationsleck statt nur einer stillen Dateninkonsistenz)
 - **Priority:** Fix before deployment — Blocker
+- **Status:** ✅ Behoben (Migration `proj10_fix_assignee_team_membership_check`) — `notify_task_assignment()` ermittelt jetzt zusätzlich das Team der Aufgabe (`projects.team_id` über `new.project_id`) und prüft per `EXISTS`-Abfrage gegen `team_members`, ob `new.assignee_id` tatsächlich Mitglied dieses Teams ist, **bevor** eine Benachrichtigung angelegt wird. Die tieferliegende Lücke in PROJ-4 (fehlende `WITH CHECK`-Klausel auf der `tasks`-UPDATE-Policy) bleibt bewusst unangetastet — das war explizit nicht Teil dieses Fixes, da der Trigger-seitige Check das konkrete Informationsleck bereits vollständig schließt, unabhängig davon, ob `assignee_id` selbst weiterhin auf beliebige User-IDs gesetzt werden kann.
+- **Re-Test (2026-09-23, minimaler Live-Test mit 3 echten Testnutzern):** Team-Mitglied A weist eine Aufgabe zunächst einem echten Team-Mitglied B zu, dann demselben Task-Datensatz einem Team-fremden Nutzer X. Ergebnis (per Admin-Abfrage ohne RLS-Filterung verifiziert): **genau eine** Benachrichtigungszeile existiert — `recipient_id = B`, `type = 'assignment'` — für X wurde **keine** Benachrichtigung angelegt. Die Zuweisung an X selbst wird weiterhin nicht verhindert (bekannte, bewusst unangetastete Restlücke aus PROJ-4), aber der Informationsleck über die Benachrichtigung ist geschlossen. Alle Testdaten (3 Nutzer, Team, Projekt, Aufgabe, Benachrichtigung) danach vollständig entfernt und auf 0 verifiziert.
+- **Hinweis zur Zugriffsbilanz:** Für Fix + Verifikation wurden 6 Supabase-Zugriffe benötigt (mehr als die anfänglich geschätzten ~3) — ein Zwischenschritt lieferte fälschlich ein leeres Ergebnis, weil die eigene Prüf-Abfrage nach `SET LOCAL role authenticated` selbst der `recipient_id = auth.uid()`-RLS-Policy unterlag und dadurch die Benachrichtigungen anderer Nutzer nicht sehen konnte — kein Fehler im Fix selbst, sondern ein Fehler in der ersten Testmethodik, der zwei zusätzliche Diagnose-Abfragen kostete.
 
 #### BUG-2: Kein Fehler-Feedback beim Markieren als gelesen
 - **Severity:** Low
@@ -253,10 +257,10 @@ Der Nutzer bat um minimalen Supabase-Zugriff für diese QA-Runde. Diese Runde be
 
 ### Summary
 - **Acceptance Criteria:** 11/11 per Code-Review erfüllt
-- **Bugs Found:** 3 total (1 High **bestätigt und unbehoben**, 0 medium, 2 low)
-- **Security:** BUG-1 ist ein bestätigter Autorisierungs-/Informationsleck-Fehler, kein bloßer Verdacht — mit einer gezielten Abfrage der `tasks`-RLS-Policy verifiziert
-- **Production Ready:** NEIN — BUG-1 ist ein Blocker (High-Severity-Sicherheitslücke)
-- **Recommendation:** BUG-1 vor Deployment beheben — der `notify_task_assignment`-Trigger muss zusätzlich prüfen, dass `new.assignee_id` tatsächlich Mitglied des Teams ist (z. B. via `is_team_member()`, analog zum bestehenden Muster), bevor eine Benachrichtigung angelegt wird. Idealerweise zusätzlich die tieferliegende Lücke in PROJ-4 schließen (`WITH CHECK`-Klausel auf der `tasks`-UPDATE-Policy, die `assignee_id` gegen Team-Mitgliedschaft prüft) — das würde auch zukünftige, heute noch nicht vorhersehbare Folgeprobleme durch dieselbe Wurzelursache verhindern. Danach erneut `/qa` laufen lassen.
+- **Bugs Found:** 3 total (1 High **behoben und live re-verifiziert**, 0 medium, 2 low offen/nicht blockierend)
+- **Security:** BUG-1 war ein bestätigter Autorisierungs-/Informationsleck-Fehler, mit einem minimalen Live-Test (3 echte Testnutzer) verifiziert behoben — Team-fremde Zuweisung erzeugt jetzt nachweislich keine Benachrichtigung mehr, legitime Zuweisung weiterhin korrekt
+- **Production Ready:** JA — kein Critical/High-Bug mehr offen. BUG-2/BUG-3 sind Low und nicht blockierend.
+- **Recommendation:** Deploy. Optional, nicht blockierend: die tieferliegende Lücke in PROJ-4 schließen (`WITH CHECK`-Klausel auf der `tasks`-UPDATE-Policy, die `assignee_id` gegen Team-Mitgliedschaft prüft) — der akute Informationsleck über Benachrichtigungen ist bereits geschlossen, aber `assignee_id` kann weiterhin auf beliebige User-IDs gesetzt werden, was bei zukünftigen Features erneut relevant werden könnte.
 
 ## Deployment
 _To be added by /deploy_
