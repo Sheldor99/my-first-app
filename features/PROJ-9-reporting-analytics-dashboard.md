@@ -1,6 +1,6 @@
 # PROJ-9: Reporting/Analytics-Dashboard
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -238,4 +238,29 @@ Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf
 - **Recommendation:** Deploy. Vor dem produktiven Verlassen auf die angezeigten Zahlen empfiehlt sich, dass der Nutzer selbst einmal kurz mit echten Projektdaten durch das Dashboard klickt, sobald Supabase-Zugriff wieder unproblematisch ist. BUG-2/BUG-3 sind nicht blockierend und können später aufgegriffen werden.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-23
+**Art:** Lokales Deployment — kein Vercel-Deployment (Projektentscheidung, gilt für alle Features)
+
+### Pre-Deployment Checks
+- [x] `npm run build` erfolgreich (Turbopack, keine Fehler)
+- [ ] `npm run lint` — bekannte, vorbestehende Lücke im Template, nicht spezifisch für PROJ-9
+- [x] QA freigegeben (Status: Approved, kein Critical/High-Bug offen — BUG-1 behoben, BUG-2/BUG-3 sind Low/nicht blockierend)
+- [x] Migration bereits im Live-Supabase-Projekt angewendet (`proj9_dashboard_stats_function`) — während `/backend` appliziert, für `/deploy` keine weitere Migration nötig
+- [x] Keine Secrets im Git-Verlauf committet
+- [x] Aller Code committet
+
+### Verifikation — auf Supabase-Zugriff = 0 reduziert (explizite Nutzeranfrage)
+Wie bei PROJ-8 wurde für dieses Deployment kein Supabase-Zugriff gemacht:
+- `npm run build` + `npm run start` auf Scratch-Port 3033 gestartet
+- Nur die `/login`-Seite geladen (löst keine Supabase-Abfrage aus) — bestätigt fehlerfreies Rendering des Produktions-Builds
+- Keine Konsolenfehler
+- **Kein** Login, **kein** Datenzugriff auf `get_team_dashboard_stats` in diesem Schritt
+- Produktions-Server danach gestoppt
+
+Die eigentliche Aggregationslogik der Datenbankfunktion wurde zu keinem Zeitpunkt in diesem Projekt (weder Backend noch QA noch Deploy) mit echten Daten ausgeführt — das ist ein bewusst über alle Phasen hinweg akzeptiertes Restrisiko dieser ressourcenschonenden Vorgehensweise. Empfehlung bleibt bestehen: sobald Supabase-Zugriff wieder unproblematisch ist, einmal mit echten Projektdaten durch das Dashboard klicken.
+
+### Bookkeeping
+- Git-Tag `v1.9.0-PROJ-9` erstellt
+- `features/INDEX.md`: Status auf **Deployed** gesetzt
+- `docs/PRD.md`: Roadmap-Status auf **Deployed** gesetzt
