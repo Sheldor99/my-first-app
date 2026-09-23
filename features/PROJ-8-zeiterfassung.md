@@ -1,6 +1,6 @@
 # PROJ-8: Zeiterfassung
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -235,4 +235,31 @@ Der Nutzer bat ausdrücklich darum, den Supabase-Zugriff für diese QA-Runde auf
 - **Recommendation:** Deploy. Falls Supabase-Zugriff später wieder unproblematisch ist, empfiehlt sich eine kurze Nachverifikation der UPDATE-Policy sowie der Team-fremd-Abgrenzung.
 
 ## Deployment
-_To be added by /deploy_
+
+**Deployed:** 2026-09-23
+**Art:** Lokales Deployment — kein Vercel-Deployment (Projektentscheidung, gilt für alle Features)
+
+### Pre-Deployment Checks
+- [x] `npm run build` erfolgreich (Turbopack, keine Fehler)
+- [ ] `npm run lint` — bekannte, vorbestehende Lücke im Template (Next.js 16 hat `next lint` entfernt, ESLint-9-Migration steht projektweit noch aus); nicht spezifisch für PROJ-8
+- [x] QA freigegeben (Status: Approved, kein Critical/High-Bug offen — BUG-1 behoben, BUG-2 ist Low/kosmetisch)
+- [x] Alle Migrationen bereits im Live-Supabase-Projekt angewendet (`proj8_task_time_entries`, `proj8_fix_future_date_check`) — beide während `/backend` bzw. `/qa` bereits appliziert, für `/deploy` keine weitere Migration nötig
+- [x] Keine Secrets im Git-Verlauf committet
+- [x] Aller Code committet
+
+### Verifikation — auf Supabase-Zugriff = 0 reduziert (explizite Nutzeranfrage)
+Anders als bei früheren Deploys (z. B. PROJ-7, wo ein echtes Testkonto den vollen Upload-/Download-Zyklus live durchlaufen hat) wurde für dieses Deployment **kein einziger Supabase-Zugriff** gemacht — auf ausdrücklichen Wunsch des Nutzers, der die Gesamtzahl der Zugriffe über die gesamte PROJ-8-Session (Backend + QA + Deploy) so gering wie möglich halten wollte.
+
+Stattdessen:
+- `npm run build` + `npm run start` auf Scratch-Port 3021 gestartet
+- Nur die `/login`-Seite geladen (löst keine Supabase-Abfrage aus, bevor ein Login-Versuch abgeschickt wird) — bestätigt, dass der Produktions-Build fehlerfrei rendert
+- Keine Konsolenfehler
+- **Kein** Login, **kein** Testkonto, **kein** Datenzugriff auf `task_time_entries` in diesem Schritt
+- Produktions-Server danach gestoppt
+
+Die eigentliche Funktionsverifikation (Zeit erfassen → anzeigen → summieren → löschen, inkl. Bugfix-Bestätigung) hat bereits in der `/qa`-Runde stattgefunden (4 Supabase-Zugriffe dort) und wird hier nicht wiederholt.
+
+### Bookkeeping
+- Git-Tag `v1.8.0-PROJ-8` erstellt
+- `features/INDEX.md`: Status auf **Deployed** gesetzt
+- `docs/PRD.md`: Roadmap-Status auf **Deployed** gesetzt
