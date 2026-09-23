@@ -1,6 +1,6 @@
 # PROJ-7: Dateianhänge an Aufgaben
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -119,6 +119,54 @@ Eine neue Tabelle beschreibt jeden Anhang: Bezug zur Aufgabe, Hochlader, Dateina
 
 ### Dependencies
 Keine neuen npm-Pakete — der bereits verwendete Supabase-Client unterstützt Datei-Uploads und signierte Download-Links direkt.
+
+## Backend Implementation Notes
+
+### Datenbankschema
+Neue Tabelle `task_attachments`:
+- `id` (uuid, PK), `task_id` (uuid, FK → `tasks.id` ON DELETE CASCADE), `uploader_id` (uuid, FK → `auth.users.id` ON DELETE SET NULL — ermöglicht die „Ehemaliges Mitglied"-Anzeige aus den Edge Cases)
+- `file_name` (text), `file_size` (bigint, CHECK 0 < Größe ≤ 10485760), `mime_type` (text), `storage_path` (text)
+- `created_at` (timestamptz, default now())
+- Index auf `(task_id, created_at)` für die sortierte Anzeige in der Anhänge-Liste
+- Keine UPDATE-Policy — Anhänge werden laut Spec nie bearbeitet, nur gelöscht und neu hochgeladen
+
+RLS-Policies auf `task_attachments` (RLS aktiviert):
+- **SELECT** — Team-Mitglieder der zugehörigen Aufgabe (via `is_team_member()`, Join über `tasks` → `projects`)
+- **INSERT** — nur als sich selbst (`uploader_id = auth.uid()`) und nur für Aufgaben des eigenen Teams
+- **DELETE** — nur der Hochladende selbst (`uploader_id = auth.uid()`), zusätzlich weiterhin an Team-Mitgliedschaft gebunden
+
+### Speicherbereich (Supabase Storage)
+Neuer privater Bucket `task-attachments`:
+- `public = false`, `file_size_limit = 10485760` (10 MB), `allowed_mime_types` = vollständige Allowlist aus den Technical Requirements (Bilder, PDF, Office-Formate, Text, ZIP) — als Bucket-Konfiguration hinterlegt, damit die Größen-/Typ-Prüfung serverseitig erzwungen wird, nicht nur clientseitig
+- Pfadstruktur: `{team_id}/{task_id}/{uuid}-{dateiname}` — die `team_id` als erstes Pfadsegment erlaubt es, `storage.foldername(name)[1]::uuid` zusammen mit der bestehenden `is_team_member()`-Funktion für die Storage-RLS zu verwenden, ohne im Storage-Policy-Ausdruck über die Metadaten-Tabelle joinen zu müssen
+
+RLS-Policies auf `storage.objects` (nur für `bucket_id = 'task-attachments'`):
+- **SELECT/INSERT** — Team-Mitglieder, geprüft anhand des im Pfad eingebetteten `team_id`
+- **DELETE** — nur der Eigentümer der Datei (`owner = auth.uid()`, automatisch von Supabase Storage beim Upload gesetzt)
+
+### Verifikation (simulierte Sessions, alle bestanden)
+Tabellen-Ebene (`task_attachments`):
+- Team-Mitglied kann eigenen Anhang anlegen und sehen ✓
+- Anderes Team-Mitglied (nicht Hochlader) kann den Anhang sehen, aber nicht löschen (0 betroffene Zeilen) ✓
+- Team-fremder Nutzer sieht 0 Zeilen, Insert wird von RLS abgelehnt, Delete betrifft 0 Zeilen ✓
+- Hochlader selbst kann eigenen Anhang löschen ✓
+
+Storage-Ebene (`storage.objects`, Bucket `task-attachments`):
+- Team-Mitglied kann Objekt unter dem eigenen Team-Pfad anlegen und sehen ✓
+- Anderes Team-Mitglied sieht das Objekt, kann es aber nicht löschen (0 betroffene Zeilen) ✓
+- Team-fremder Nutzer sieht 0 Zeilen, Insert unter fremdem Team-Pfad wird von RLS abgelehnt, Delete betrifft 0 Zeilen ✓
+- Eigentümer der Datei kann sie löschen ✓
+- Bucket-Konfiguration bestätigt: `public=false`, `file_size_limit=10485760`, vollständige `allowed_mime_types`-Liste ✓
+
+Hinweis: Direkte SQL-DELETEs auf `storage.objects` sind durch einen Supabase-eigenen Schutztrigger (`storage.protect_delete()`) grundsätzlich gesperrt und wurden für die Tests gezielt über die Session-Einstellung `storage.allow_delete_query` freigeschaltet — im späteren Produktivbetrieb laufen echte Löschungen ausschließlich über die Storage-API (Supabase-Client im Frontend), wie in der Architektur vorgesehen.
+
+`get_advisors(type: "security")` nach beiden Migrationen geprüft — keine neuen Findings, alle gemeldeten Punkte betreffen bereits bestehende Funktionen aus früheren Features.
+
+Alle Testdaten (Nutzer, Team, Projekt, Aufgabe, Anhang-Zeilen, Storage-Objekte) nach Abschluss vollständig entfernt und über Zählabfragen auf 0 verifiziert.
+
+### Migrationen
+- `proj7_task_attachments` — Tabelle, RLS-Policies, Index
+- `proj7_task_attachments_bucket` — Bucket-Eintrag + Storage-RLS-Policies
 
 ## QA Test Results
 _To be added by /qa_
