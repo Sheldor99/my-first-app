@@ -81,12 +81,43 @@ _Keine offenen Fragen — alle Entscheidungen (manuelle Eingabe statt Timer, Dau
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neue Datenbanktabelle für Zeiteinträge, getrennt von der Aufgabe | Folgt demselben „eine Tabelle pro Entität"-Muster wie `task_comments` (PROJ-6) und `task_attachments` (PROJ-7) | 2026-09-23 |
+| Dauer intern in Minuten (Ganzzahl) gespeichert, Eingabe/Anzeige in Stunden | Vermeidet Rundungsfehler bei wiederholter Bearbeitung eines Eintrags | 2026-09-23 |
+| Zugriffsbeschränkung über dieselbe Team-Mitgliedschafts-Regel wie Aufgaben/Kommentare/Anhänge | Konsistentes, bereits bewährtes RLS-Muster, keine neue Berechtigungslogik nötig | 2026-09-23 |
+| Bearbeiten/Löschen serverseitig (RLS) auf den Ersteller beschränkt, nicht nur clientseitig versteckt | Konsistent mit PROJ-6/PROJ-7; verhindert Umgehung über direkte API-Aufrufe | 2026-09-23 |
+| Gesamtdauer pro Aufgabe wird aus geladenen Einträgen berechnet, kein separates Summenfeld | Vermeidet Synchronisationsprobleme bei gleichzeitigen Änderungen durch mehrere Nutzer | 2026-09-23 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+TaskCard (bestehend, erweitert)
+└── Uhr-Icon mit Gesamtdauer (neu, öffnet die Zeiterfassungs-Ansicht) — gleiches Muster wie Kommentar-/Anhang-Zähler aus PROJ-6/PROJ-7
+
+Zeiterfassungs-Dialog (neu)
+├── Formular „Zeit erfassen" (Dauer in Stunden, Datum, optionale Notiz)
+├── Liste der Zeiteinträge (Nutzer-E-Mail, Datum, Dauer, Notiz), neueste zuerst
+│   └── Pro eigenem Eintrag: „Bearbeiten"- und „Löschen"-Optionen
+└── Leer-Zustand ("Noch keine Zeit erfasst")
+```
+
+### Data Model (plain language)
+Eine neue Tabelle beschreibt jeden Zeiteintrag: Bezug zur Aufgabe, Ersteller, Datum, Dauer und eine optionale Notiz — plus einen Zeitstempel der Erstellung. Die Dauer wird von den Nutzern in Stunden eingegeben (z. B. „1,5"), aber intern in Minuten als ganze Zahl gespeichert, um Rundungsfehler bei mehrfacher Bearbeitung zu vermeiden. Es werden keine Dateien gespeichert — im Gegensatz zu PROJ-7 wird hier kein Speicherbereich (Storage) benötigt, nur eine reine Datenbank-Tabelle.
+
+Die Gesamtdauer, die auf der Aufgaben-Karte angezeigt wird, ist kein eigenes gespeichertes Feld, sondern wird direkt aus der Summe der geladenen Zeiteinträge berechnet.
+
+### Tech Decisions
+- Neue Datenbanktabelle für Zeiteinträge, getrennt von der Aufgabe selbst — folgt demselben Muster wie die Kommentar-Tabelle (PROJ-6) und die Anhang-Metadaten-Tabelle (PROJ-7).
+- Speicherung der Dauer in Minuten (Ganzzahl) statt als Dezimalstunden — verhindert Rundungsfehler, wenn ein Eintrag später bearbeitet wird; die Umrechnung in/aus Stunden passiert nur bei der Anzeige und Eingabe.
+- Zugriffsbeschränkung über dieselbe Regel wie bei Aufgaben, Kommentaren und Anhängen: nur Mitglieder des Teams, dem die zugehörige Aufgabe gehört, dürfen Einträge sehen oder anlegen.
+- Bearbeiten und Löschen ist ausschließlich für den ursprünglichen Ersteller möglich — diese Regel wird nicht nur in der Oberfläche versteckt, sondern serverseitig erzwungen (dieselbe Absicherung wie bei Kommentaren und Anhängen).
+- Die Gesamtdauer pro Aufgabe wird aus den geladenen Einträgen berechnet statt in einem separaten Summenfeld gespeichert — vermeidet, dass die Summe bei gleichzeitigen Änderungen mehrerer Nutzer aus dem Takt gerät.
+
+### Dependencies
+Keine neuen npm-Pakete — das Formular nutzt dieselben bereits vorhandenen Bibliotheken (react-hook-form, Zod) wie die übrigen Formulare im Projekt; es sind keine Datei-Uploads oder sonstigen Sonderfunktionen nötig.
 
 ## QA Test Results
 _To be added by /qa_
