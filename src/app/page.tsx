@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { CreateTeamForm } from "@/components/teams/create-team-form"
 import { TeamSwitcher } from "@/components/teams/team-switcher"
 import { ProjectList } from "@/components/projects/project-list"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 export default function Home() {
   const [isAuthLoading, setIsAuthLoading] = useState(true)
@@ -84,6 +85,7 @@ export default function Home() {
           )}
         </div>
         <div className="flex items-center gap-4">
+          <NotificationBell />
           <span className="text-sm text-muted-foreground">{email}</span>
           <Button onClick={handleLogout} disabled={isLoggingOut} variant="outline" size="sm">
             {isLoggingOut ? "Wird ausgeloggt…" : "Logout"}

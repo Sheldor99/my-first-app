@@ -1,6 +1,6 @@
 # PROJ-10: Benachrichtigungen
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -110,6 +110,45 @@ Eine neue Tabelle beschreibt jede Benachrichtigung: für wen sie bestimmt ist, w
 
 ### Dependencies
 Keine neuen npm-Pakete — Verwendung bereits vorhandener shadcn/ui-Komponenten (Popover oder Sheet, kombiniert mit der bereits mehrfach genutzten ScrollArea für die scrollbare Liste).
+
+## Frontend Implementation Notes
+
+### Komponenten
+- `src/hooks/use-notifications.ts` — lädt Benachrichtigungen des eingeloggten Nutzers (`recipient_id = auth.uid()`), reichert sie mit Aufgaben-Titel/Projekt-ID (Join über `tasks`) und Auslöser-E-Mail (Join über `profiles`) an; `markAsRead(id)` und `markAllAsRead()` mit optimistischem UI-Update und Rollback per Neuladen bei Fehler
+- `src/components/notifications/notification-bell.tsx` — Glocken-Icon mit Anzahl-Badge, öffnet ein `Popover` mit scrollbarer Liste (`ScrollArea h-80`, von Anfang an begrenzt), „Alle als gelesen markieren"-Button, Leer-Zustand („Keine Benachrichtigungen")
+- `src/app/page.tsx` und `src/app/dashboard/page.tsx` — Glocke im jeweiligen Header eingebunden
+
+### Bekannte Lücke: keine globale Kopfzeile im Projekt
+Das Projekt hat aktuell keine gemeinsame Layout-Kopfzeile (`src/app/layout.tsx` enthält nur `<Toaster />`, jede Seite baut ihren eigenen Header). Die Glocke wurde daher nur auf den zwei Seiten mit vorhandenem Header eingebunden (Startseite, Dashboard). **Die Aufgaben-Detailseite (`/projects/[id]`) hat gar keinen Header** und zeigt die Glocke daher nicht — ein vorbestehender struktureller Zustand des Projekts, keine Neueinführung durch dieses Feature. Eine echte „von überall erreichbar"-Lösung würde einen größeren Refactor (gemeinsame Layout-Kopfzeile für alle eingeloggten Seiten) erfordern, der über den Rahmen dieses Features hinausgeht.
+
+### Verlinkung zur Aufgabe
+Da einzelne Aufgaben keine eigene URL/Ankerstelle im Aufgaben-Board haben, verlinkt eine Benachrichtigung auf die Projektseite (`/projects/{project_id}`), auf der die Aufgabe liegt — nicht direkt auf die Aufgabe selbst (kein Scroll-to/Highlight). Das erfüllt die Spec-Anforderung „Link zur betroffenen Aufgabe" auf der gröbsten sinnvollen Ebene, die mit der bestehenden Board-Struktur möglich ist, ohne das Board selbst zu erweitern.
+
+### Vertrag für die geplante Backend-Tabelle (für `/backend` verbindlich)
+Der Hook erwartet eine Tabelle `notifications` mit mindestens folgenden Spalten:
+
+```
+id: uuid
+recipient_id: uuid       -- für wen die Benachrichtigung ist
+task_id: uuid (nullable) -- betroffene Aufgabe, FK auf tasks(id) ON DELETE CASCADE
+actor_id: uuid (nullable) -- wer das Ereignis ausgelöst hat, FK auf auth.users(id) ON DELETE SET NULL
+type: text                -- 'assignment' | 'comment'
+is_read: boolean
+created_at: timestamptz
+```
+
+Wichtig für `/backend`:
+- `task_id` muss `ON DELETE CASCADE` auf `tasks(id)` gesetzt sein — erfüllt den Spec-Edge-Case „Aufgabe gelöscht → Benachrichtigung wird mitgelöscht"
+- `actor_id` muss `ON DELETE SET NULL` auf `auth.users(id)` gesetzt sein — ermöglicht die „Ehemaliges Mitglied"-Anzeige, analog zu PROJ-6/7/8
+- Die Zeilen müssen laut Architektur-Entscheidung **automatisch per Datenbank-Trigger** entstehen (bei Zuweisungsänderung auf `tasks` und bei Insert auf `task_comments`), nicht durch App-Code
+- RLS: `recipient_id = auth.uid()` für SELECT und UPDATE — strenger als das sonstige Team-weite Muster, siehe Architektur-Entscheidung
+- Keine Selbstbenachrichtigung: Trigger muss prüfen, dass `actor_id <> recipient_id`, bevor eine Zeile eingefügt wird
+
+### Hinweis zur Implementierungsreihenfolge
+Wie bei PROJ-8/PROJ-9 wurde das Frontend vor dem Backend gebaut. `npx tsc --noEmit` und `npm run build` sind fehlerfrei, da der Supabase-Client ohne generierte Datenbank-Typen verwendet wird. **Kein Browser-Test möglich**, bevor `/backend` die Tabelle `notifications` und die auslösenden Trigger angelegt hat.
+
+### Supabase-Zugriffsbilanz dieses Schritts
+0 Supabase-Zugriffe — ausschließlich lokaler Code und lokale Checks (`tsc`, `npm run build`).
 
 ## QA Test Results
 _To be added by /qa_

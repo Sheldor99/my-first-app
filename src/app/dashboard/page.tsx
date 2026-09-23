@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 
 export default function DashboardPage() {
   const { activeTeamId, isLoading: isTeamsLoading } = useTeams()
@@ -34,6 +35,7 @@ export default function DashboardPage() {
           </Button>
           <h1 className="text-lg font-semibold">Dashboard</h1>
         </div>
+        <NotificationBell />
       </header>
 
       <main className="mx-auto max-w-5xl p-6">
