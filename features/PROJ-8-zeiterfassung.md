@@ -130,10 +130,36 @@ Keine neuen npm-Pakete — das Formular nutzt dieselben bereits vorhandenen Bibl
 - `src/components/tasks/task-board.tsx` — lädt Gesamtdauer pro Aufgabe (`fetchTotalTimeByTask`, Summe aus `task_time_entries`), verwaltet den geöffneten Dialog-State, aktualisiert die Summe nach Änderungen
 
 ### Hinweis zur Implementierungsreihenfolge
-Diese Feature wurde mit `/frontend` vor `/backend` gebaut (Architektur war bereits abgeschlossen). Der Code referenziert die geplante Tabelle `task_time_entries` (Spalten: `id`, `task_id`, `user_id`, `entry_date`, `duration_minutes`, `note`, `created_at`, `updated_at`), die erst in `/backend` tatsächlich angelegt wird. `npx tsc --noEmit` und `npm run build` sind fehlerfrei, da der Supabase-Client in diesem Projekt ohne generierte Datenbank-Typen verwendet wird (`.from()`-Aufrufe sind zur Compile-Zeit nicht gegen das Schema geprüft). **Ein Browser-Test des Features ist erst nach `/backend` möglich**, wenn die Tabelle und RLS-Policies existieren.
+Diese Feature wurde mit `/frontend` vor `/backend` gebaut (Architektur war bereits abgeschlossen). Der Code referenzierte zunächst die geplante Tabelle `task_time_entries` mit einem `updated_at`-Feld; dieses wurde beim `/backend`-Schritt aus Schema und Hook entfernt, da kein „zuletzt bearbeitet"-Zeitstempel laut Spec angezeigt wird (siehe Backend Implementation Notes). Die tatsächlich angelegte Tabelle hat die Spalten `id`, `task_id`, `user_id`, `entry_date`, `duration_minutes`, `note`, `created_at`. `npx tsc --noEmit` und `npm run build` waren während der Frontend-Phase bereits fehlerfrei, da der Supabase-Client in diesem Projekt ohne generierte Datenbank-Typen verwendet wird (`.from()`-Aufrufe sind zur Compile-Zeit nicht gegen das Schema geprüft).
 
 ### Zod-Implementierungsdetail
 Die Dauer wird im Formular-Schema als `string` geführt (nicht `z.coerce.number()`), da Zod 4 in Kombination mit `@hookform/resolvers` bei coerzierten Feldern zu einem Typkonflikt zwischen Eingabe- und Ausgabetyp von `useForm` führt. Die Umwandlung in eine Zahl (`Number(values.hours)`) passiert explizit beim Absenden, vor dem Aufruf von `hoursToMinutes()`.
+
+## Backend Implementation Notes
+
+### Datenbankschema
+Neue Tabelle `task_time_entries`:
+- `id` (uuid, PK), `task_id` (uuid, FK → `tasks.id` ON DELETE CASCADE), `user_id` (uuid, FK → `auth.users.id` ON DELETE SET NULL — ermöglicht die „Ehemaliges Mitglied"-Anzeige aus den Edge Cases)
+- `entry_date` (date), `duration_minutes` (integer, CHECK 0 < Dauer ≤ 1440 = 24 Std.), `note` (text, CHECK max. 500 Zeichen)
+- `created_at` (timestamptz, default now())
+- Index auf `(task_id, entry_date desc)` für die sortierte Anzeige (neueste zuerst)
+- Kein separates `updated_at`-Feld — Bearbeiten eines Eintrags aktualisiert nur `entry_date`/`duration_minutes`/`note`, ein „zuletzt bearbeitet"-Zeitstempel wird laut Spec nirgends angezeigt
+
+RLS-Policies auf `task_time_entries` (RLS aktiviert):
+- **SELECT** — Team-Mitglieder der zugehörigen Aufgabe (via `is_team_member()`, Join über `tasks` → `projects`) — identisches Muster wie bei `task_comments`/`task_attachments`
+- **INSERT** — nur als sich selbst (`user_id = auth.uid()`) und nur für Aufgaben des eigenen Teams
+- **UPDATE** — nur der Ersteller selbst (`user_id = auth.uid()`), zusätzlich weiterhin an Team-Mitgliedschaft gebunden
+- **DELETE** — nur der Ersteller selbst (`user_id = auth.uid()`), zusätzlich weiterhin an Team-Mitgliedschaft gebunden
+
+### Migration
+- `proj8_task_time_entries` — Tabelle, RLS-Policies, Index (ein einziger Migrationsaufruf)
+
+### Verifikation — bewusst reduziert (explizite Nutzeranfrage)
+Der Nutzer bat ausdrücklich darum, so wenig Supabase-Zugriffe wie möglich zu machen, da eine Kontosperrung wegen zu vieler Zugriffe drohte. Anders als bei PROJ-6/PROJ-7 wurde daher **keine** Live-Verifikation mit simulierten Sessions/Testkonten durchgeführt und **kein** `get_advisors`-Check ausgeführt — der gesamte Backend-Schritt bestand aus einem einzigen `apply_migration`-Aufruf.
+
+Stattdessen erfolgte die Absicherung durch **Code-Review gegen bereits verifizierte Muster**: Die vier Policies sind strukturell identisch zu den in PROJ-6 (Kommentare) und PROJ-7 (Anhänge) bereits mit simulierten Sessions getesteten Policies (gleiche `is_team_member()`-Prüfung, gleiches „Ersteller-only"-Muster für UPDATE/DELETE via `auth.uid()`-Vergleich). Da diese Muster in den Vorgänger-Features bereits mehrfach erfolgreich gegen Team-Mitglieder, Team-Fremde und Nicht-Ersteller getestet wurden, wird von struktureller Korrektheit ausgegangen.
+
+**Bekannte Lücke:** Diese Annahme wurde für PROJ-8 nicht durch eigene Tests bestätigt. Sollte in der QA-Phase Supabase-Zugriff wieder unproblematisch sein, sollte dort mindestens eine stichprobenartige RLS-Verifikation (Team-Mitglied kann eigenen Eintrag anlegen/bearbeiten/löschen, anderes Mitglied sieht ihn aber kann ihn nicht ändern, Team-Fremder sieht nichts) nachgeholt werden.
 
 ## QA Test Results
 _To be added by /qa_

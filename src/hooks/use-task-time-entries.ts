@@ -13,7 +13,6 @@ export interface TaskTimeEntry {
   duration_minutes: number
   note: string | null
   created_at: string
-  updated_at: string
 }
 
 export function useTaskTimeEntries(taskId: string | null) {
@@ -40,7 +39,7 @@ export function useTaskTimeEntries(taskId: string | null) {
 
     const { data: entryRows, error: entryError } = await supabase
       .from("task_time_entries")
-      .select("id, task_id, user_id, entry_date, duration_minutes, note, created_at, updated_at")
+      .select("id, task_id, user_id, entry_date, duration_minutes, note, created_at")
       .eq("task_id", taskId)
       .order("entry_date", { ascending: false })
       .order("created_at", { ascending: false })
