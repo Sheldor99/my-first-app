@@ -173,7 +173,7 @@ export function TaskCommentsDialog({
         ) : comments.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Noch keine Kommentare</p>
         ) : (
-          <ScrollArea className="max-h-80 flex-1">
+          <ScrollArea className="h-80">
             <div className="space-y-4 pr-4">
               {comments.map((comment) => (
                 <div key={comment.id} className="space-y-1">

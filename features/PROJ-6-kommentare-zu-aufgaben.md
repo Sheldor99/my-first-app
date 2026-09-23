@@ -1,6 +1,6 @@
 # PROJ-6: Kommentare zu Aufgaben
 
-## Status: In Review
+## Status: Approved
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -51,7 +51,7 @@
 - Eine Aufgabe wird gelöscht, während ein Nutzer gerade einen Kommentar dazu verfasst → das Speichern schlägt fehl (Aufgabe existiert nicht mehr), Fehlermeldung erscheint statt eines Absturzes
 - Sehr viele Kommentare zu einer Aufgabe (50+) → die Liste scrollt innerhalb eines begrenzten Bereichs, kein unbegrenztes Wachsen der Ansicht
 - Kommentar besteht nur aus Leerzeichen → wird wie ein leerer Kommentar behandelt und blockiert
-- Ein Nutzer verlässt das Team, nachdem er Kommentare geschrieben hat → bestehende Kommentare bleiben mit seiner E-Mail sichtbar erhalten (kein Kaskadieren-Löschen), analog zum bestehenden Verhalten bei verwaisten Aufgaben-Zuweisungen aus PROJ-4
+- Ein Nutzer verlässt das Team, nachdem er Kommentare geschrieben hat → bestehende Kommentare bleiben inhaltlich vollständig sichtbar erhalten (kein Kaskadieren-Löschen). Die Autor-Anzeige zeigt „Ehemaliges Mitglied" statt der E-Mail-Adresse, da die bestehende Profil-Sichtbarkeitsregel aus PROJ-4 (nur für aktuelle Team-Mitglieder) das Anzeigen der E-Mail einer Person ohne verbleibende gemeinsame Teammitgliedschaft bewusst verhindert — analog zum „Niemand zugewiesen"-Verhalten bei verwaisten Aufgaben-Zuweisungen aus PROJ-4
 
 ## Technical Requirements
 - Security: Kommentare sind nur für Mitglieder des Teams sichtbar/erstellbar, dem die zugehörige Aufgabe gehört — dieselbe Berechtigungsgrenze wie bei Aufgaben aus PROJ-4
@@ -73,6 +73,7 @@ _Keine offenen Fragen — Standardentscheidungen konsistent mit bestehenden Must
 | Zeichenlimit 2000 statt unbegrenzt oder kürzer | Großzügig genug für echte Diskussionsbeiträge, aber begrenzt genug um riesige Textblöcke zu vermeiden | 2026-09-22 |
 | Kein Realtime, keine Benachrichtigungen, keine Anhänge, keine @Erwähnungen im MVP | Jeweils eigene Features (PROJ-7, PROJ-10) oder Non-Goals laut PRD; konsistent mit dem Rest der App (kein Realtime bisher) | 2026-09-22 |
 | Kommentare bleiben erhalten, wenn der Autor das Team verlässt | Historischer Kontext der Diskussion bleibt nachvollziehbar; analog zum bewusst zurückgestellten Verhalten bei verwaisten Aufgaben-Zuweisungen (PROJ-4 BUG-1) | 2026-09-22 |
+| Nach QA-Fund (BUG-2) präzisiert: die Autor-Anzeige eines ehemaligen Mitglieds zeigt „Ehemaliges Mitglied" statt der E-Mail, statt die bestehende Profil-Sichtbarkeitsregel aus PROJ-4 aufzuweichen | Die ursprüngliche Formulierung „bleibt mit seiner E-Mail sichtbar" widersprach der bereits bestehenden `profiles`-RLS-Regel; die E-Mail einer Person ohne verbleibende gemeinsame Teammitgliedschaft weiterhin zu verbergen ist datensparsamer als die Regel für diesen einen Anzeigefall zu lockern | 2026-09-22 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
@@ -174,7 +175,7 @@ Geänderte Dateien:
 ### Acceptance Criteria Status
 
 #### Kommentare anzeigen
-- [ ] **BUG-1 gefunden** (siehe unten): Kommentare sind zwar chronologisch sortiert und mit Autor/Zeitstempel versehen, aber bei mehr als ca. 5 Kommentaren sind ältere/weitere Kommentare unerreichbar (nicht scrollbar) — die Kriterien-Bedingung „sieht es **alle** Kommentare" ist damit nicht erfüllt, sobald eine Aufgabe genug Kommentare hat
+- [x] **BUG-1 behoben und re-verifiziert**: Kommentare sind chronologisch sortiert, mit Autor/Zeitstempel versehen, und die Liste ist jetzt bei beliebig vielen Kommentaren vollständig scrollbar erreichbar (mit 55 Testkommentaren erneut verifiziert)
 - [x] Leer-Zustand „Noch keine Kommentare" korrekt
 - [x] Kommentaranzahl auf der Karte im Board stimmt immer mit der tatsächlichen Anzahl überein (live mit 0, 1, 3 und 55 Kommentaren verifiziert)
 
@@ -200,13 +201,13 @@ Geänderte Dateien:
 - [x] Handled correctly — live reproduziert (Task per SQL während offener Kommentar-Eingabe gelöscht, dann abgesendet): Fehlermeldung erscheint, kein Absturz, Eingabetext bleibt erhalten
 
 #### EC-3: Sehr viele Kommentare (50+)
-- [ ] **BUG-1 gefunden** (siehe unten) — mit 55 Testkommentaren bestätigt: die Liste wächst nicht unbegrenzt (Dialog behält seine Größe), aber sie scrollt auch nicht — Kommentare ab ca. Nr. 6 sind vollständig unsichtbar und nicht erreichbar, weder per Mausrad noch anders
+- [x] **BUG-1 behoben und re-verifiziert** — mit 55 Testkommentaren erneut geprüft: die Liste bleibt auf 320px begrenzt (kein unbegrenztes Wachsen) und scrollt jetzt korrekt innerhalb dieses Bereichs; „Kommentar Nr. 55" ist erreichbar, Scrollbalken sichtbar
 
 #### EC-4: Kommentar aus nur Leerzeichen
 - [x] Handled correctly — wird wie leer behandelt und blockiert (bestätigt durch `.trim()` in der Zod-Validierung)
 
 #### EC-5: Autor verlässt das Team, nachdem er kommentiert hat
-- [ ] **BUG-2 gefunden** (siehe unten) — der Kommentar selbst bleibt sichtbar (kein Kaskadieren-Löschen, wie gefordert), aber entgegen dem Wortlaut der Spec „bleiben **mit seiner E-Mail** sichtbar" wird die E-Mail nicht angezeigt, sondern „Ehemaliges Mitglied" — Ursache: die bestehende `profiles`-RLS-Policy (`shares_team_with()`) aus PROJ-4 verweigert verbleibenden Mitgliedern den Zugriff auf das Profil eines Nutzers, der keine gemeinsame Teammitgliedschaft mehr hat
+- [x] **BUG-2 behoben (als Spec-Korrektur)** — der Kommentar bleibt inhaltlich vollständig sichtbar (kein Kaskadieren-Löschen, wie gefordert); die Autor-Anzeige zeigt „Ehemaliges Mitglied" statt der E-Mail, weil die bestehende `profiles`-RLS-Policy (`shares_team_with()`) aus PROJ-4 das Profil eines ausgetretenen Nutzers bewusst verbirgt. Der Spec-Edge-Case-Text wurde entsprechend präzisiert, statt die Sichtbarkeitsregel aufzuweichen (siehe Product Decisions)
 
 ### Security Audit Results (Red Team)
 - [x] Authentication: Ohne Login kein Zugriff (bestehender Proxy-Schutz aus PROJ-2, nicht verändert)
@@ -232,7 +233,10 @@ Geänderte Dateien:
   3. Erwartet: die ersten paar Kommentare sind sichtbar, der Rest ist über Scrollen in der Liste erreichbar
   4. Tatsächlich: nur die ersten ca. 5 Kommentare sind sichtbar; weder Mausrad-Scroll noch sonstige Interaktion zeigen weitere Kommentare. Per DOM-Inspektion bestätigt: Der innere Scroll-Viewport (`[data-radix-scroll-area-viewport]`) wächst auf die volle Inhaltshöhe (3504px bei 55 Kommentaren) mit `scrollHeight === clientHeight` (also nichts zum Scrollen *innerhalb* des Viewports), während der äußere `ScrollArea`-Container korrekt auf 320px (`max-h-80`) begrenzt ist und den Überschuss per `overflow: hidden` einfach abschneidet statt ihn scrollbar zu machen. Die `h-full`-Höhe der Radix-Viewport-Komponente löst sich offenbar nicht wie erwartet gegen die `max-h-80`-Begrenzung des Eltern-Elements auf.
 - **Impact:** Bei jeder Aufgabe mit mehr als eine Handvoll Kommentaren sind ältere Kommentare faktisch unsichtbar und nicht bearbeitbar/löschbar — ein Kernversprechen des Features („alle Kommentare sehen") ist nicht erfüllt. Keine Datenverluste, keine Sicherheitslücke — die Kommentare existieren unverändert in der DB.
-- **Priority:** Fix before deployment (blockiert laut Produktionsreife-Kriterium, da High-Bug)
+- **Status:** **Fixed** (auf Nutzerwunsch sofort behoben)
+- **Fix:** In `task-comments-dialog.tsx` wurde `className="max-h-80 flex-1"` am `ScrollArea` durch `className="h-80"` ersetzt. Ursache war eine Kombination zweier Probleme: `flex-1` setzt in einem Spalten-Flex-Container `flex-basis: 0%` auf die Haupt­achse (Höhe) und überschreibt damit die gewünschte Größe, und die Radix-`Viewport`-Komponente (`h-full`, also `height: 100%`) kann ihre Höhe nicht gegen eine reine `max-height` des Elternteils auflösen. Mit einer definiten Höhe (`h-80`) erbt der Viewport korrekt 320px, wodurch `scrollHeight > clientHeight` gilt und natives Scrollen greift.
+- **Re-Verifikation:** Mit 55 Kommentaren erneut geprüft — `clientHeight: 320`, `scrollHeight: 3504`, `canScroll: true`; „Kommentar Nr. 55" ist per Scrollen erreichbar, Scrollbalken sichtbar; `npm test` 42/42 weiterhin grün
+- **Priority:** Fixed before deployment
 
 #### BUG-2: Kommentare eines ehemaligen Team-Mitglieds zeigen „Ehemaliges Mitglied" statt der in der Spec geforderten E-Mail
 - **Severity:** Low
@@ -243,14 +247,16 @@ Geänderte Dateien:
   4. Erwartet laut Spec-Edge-Case: „bestehende Kommentare bleiben **mit seiner E-Mail** sichtbar erhalten"
   5. Tatsächlich: Der Kommentar bleibt sichtbar (kein Datenverlust), aber statt der E-Mail erscheint „Ehemaliges Mitglied", weil die bestehende `profiles`-RLS-Policy (`shares_team_with()`, aus PROJ-4) dem verbleibenden Mitglied keinen Lesezugriff mehr auf das Profil des ausgetretenen Autors gewährt.
 - **Assessment:** Dies ist eine bewusste, während der Frontend-Implementierung dokumentierte Design-Entscheidung (siehe Implementation Notes, analog zum „Niemand zugewiesen"-Fallback aus PROJ-4 BUG-1) — technisch korrekt und aus Datenschutzsicht sogar vorzugswürdig (kein Aufdecken der E-Mail einer Person, die keine gemeinsame Teammitgliedschaft mehr hat). Der Fund betrifft daher primär eine **Abweichung zwischen Spec-Text und tatsächlichem/beabsichtigtem Verhalten**, nicht zwingend einen Implementierungsfehler.
-- **Priority:** Nice to have — Empfehlung: Spec-Text anpassen („bleibt sichtbar, ggf. als „Ehemaliges Mitglied" falls das Profil nicht mehr einsehbar ist") statt Verhalten zu ändern, da die aktuelle Lösung konsistenter und datensparsamer ist.
+- **Status:** **Fixed (als Spec-Korrektur)** — auf Nutzerwunsch behoben
+- **Fix:** Kein Code geändert. Stattdessen wurde der Edge-Case-Text der Spec präzisiert („zeigt „Ehemaliges Mitglied" statt der E-Mail, da die Profil-Sichtbarkeitsregel aus PROJ-4 das bewusst verhindert") und eine entsprechende Product Decision ergänzt. Begründung: Die bestehende `profiles`-RLS-Regel für diesen einen Anzeigefall aufzuweichen, würde die E-Mail einer Person offenlegen, die keine gemeinsame Teammitgliedschaft mehr hat — die aktuelle Lösung ist datensparsamer und konsistent mit dem „Niemand zugewiesen"-Fallback aus PROJ-4.
+- **Priority:** Fixed before deployment
 
 ### Summary
-- **Acceptance Criteria:** 7/9 passed (2 betroffen von BUG-1)
-- **Bugs Found:** 2 total (0 critical, 1 high, 0 medium, 1 low)
+- **Acceptance Criteria:** 9/9 passed (nach Behebung von BUG-1)
+- **Bugs Found:** 2 total (0 critical, 1 high, 0 medium, 1 low) — **beide behoben und re-verifiziert**
 - **Security:** Pass — Autorisierung, Input-Validierung und XSS-Schutz funktionieren korrekt
-- **Production Ready:** NO — BUG-1 (High) muss vor dem Deployment behoben werden
-- **Recommendation:** BUG-1 zuerst beheben (ScrollArea-Höhenvererbung korrigieren, z. B. durch explizite `height`-Klasse statt `max-h-80` auf dem `ScrollArea`-Root, oder Höhe direkt auf die Radix-`Viewport`-Komponente anwenden), dann erneut `/qa` ausführen. BUG-2 kann parallel oder später als reine Doku-Korrektur behandelt werden.
+- **Production Ready:** YES
+- **Recommendation:** Deploy.
 
 ## Deployment
 _To be added by /deploy_
