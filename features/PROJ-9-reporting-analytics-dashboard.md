@@ -142,6 +142,32 @@ Wie bei PROJ-8 wurde das Frontend vor dem Backend gebaut. `npx tsc --noEmit` und
 ### Supabase-Zugriffsbilanz dieses Schritts
 0 Supabase-Zugriffe — der gesamte Frontend-Schritt bestand ausschließlich aus lokalem Code (Komponenten, Hook, Routing) und lokalen Checks (`tsc`, `npm run build`).
 
+## Backend Implementation Notes
+
+### Datenbankfunktion
+Neue Funktion `get_team_dashboard_stats(p_team_id uuid)` — gibt pro Projekt des übergebenen Teams eine Zeile mit `project_id`, `project_name`, `todo_count`, `in_progress_count`, `done_count`, `overdue_count`, `total_minutes` zurück. Erfüllt exakt den in den Frontend Implementation Notes festgelegten Vertrag (Funktionsname und Parametername `p_team_id` stimmen überein).
+
+**Keine Tabelle, keine RLS-Policy nötig** — die Funktion liest ausschließlich aus bereits bestehenden, RLS-geschützten Tabellen (`projects`, `tasks`, `task_time_entries`).
+
+### Sicherheitsmodell — bewusst ohne eigene Autorisierungsprüfung
+Die Funktion ist **`SECURITY INVOKER`** (Postgres-Standard, da keine `SECURITY DEFINER`-Klausel gesetzt wurde) — sie läuft mit den Rechten des aufrufenden Nutzers, nicht mit erhöhten Rechten. Dadurch greifen automatisch dieselben RLS-Policies, die bereits für `projects`/`tasks`/`task_time_entries` gelten und in PROJ-3/PROJ-4/PROJ-8 mehrfach verifiziert wurden:
+
+- Ruft ein Nutzer die Funktion mit der `team_id` seines eigenen Teams auf → die zugrundeliegenden `SELECT`-Policies lassen die Zeilen durch, die Aggregation liefert die korrekten Zahlen
+- Ruft ein Nutzer die Funktion mit einer fremden `team_id` auf (z. B. durch einen manipulierten RPC-Aufruf) → die `SELECT`-Policies auf `projects`/`tasks` liefern für dieses fremde Team keine Zeilen zurück, die Aggregation ergibt strukturell ein leeres Ergebnis (kein Fehler, aber auch keine Daten) — dieselbe Absicherung wie überall sonst im Projekt, ohne eigene, separat zu pflegende Berechtigungslogik in der Funktion selbst
+
+Diese Entscheidung wurde bewusst getroffen, um die Migration minimal zu halten (kein zusätzlicher `is_team_member()`-Check nötig, da die zugrundeliegenden Tabellen ihn bereits erzwingen) und passt zur aktuellen Vorgabe, Supabase-Zugriffe gering zu halten.
+
+### Migration
+- `proj9_dashboard_stats_function` — ein einziger Migrationsaufruf, legt ausschließlich die Funktion an
+
+### Verifikation — auf Code-Review reduziert (explizite Nutzeranfrage)
+Auf ausdrücklichen Wunsch des Nutzers wurde für PROJ-9 **kein** Live-Test durchgeführt (weder Smoke-Test noch `get_advisors`) — der gesamte Backend-Schritt bestand aus einem einzigen `apply_migration`-Aufruf. Die Korrektheit stützt sich auf:
+- Code-Review der SQL-Funktion gegen den in den Frontend Implementation Notes festgelegten Vertrag (Feldnamen, Typen, Parametername stimmen überein)
+- Die strukturelle Absicherung durch `SECURITY INVOKER` + bereits mehrfach verifizierte RLS auf den zugrundeliegenden Tabellen (siehe oben)
+- Lokale Checks: `npx tsc --noEmit` und `npm run build` laufen fehlerfrei
+
+**Bekannte Lücke:** Die Funktion selbst (insbesondere die `overdue_count`-Logik und die korrekte Summenbildung bei mehreren Zeiteinträgen pro Aufgabe) wurde nicht live mit echten Daten ausgeführt. Sollte in der QA-Phase Supabase-Zugriff wieder unproblematisch sein, sollte dort mindestens ein einmaliger Aufruf mit echten Testdaten (mehrere Projekte, gemischte Status, überfällige und nicht-überfällige Aufgaben, mehrere Zeiteinträge pro Aufgabe) erfolgen, um die Aggregationslogik zu bestätigen.
+
 ## QA Test Results
 _To be added by /qa_
 
