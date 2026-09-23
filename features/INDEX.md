@@ -24,7 +24,7 @@
 | PROJ-7 | Dateianhänge an Aufgaben | P1 | PROJ-1, PROJ-4 | Deployed | [PROJ-7](PROJ-7-dateianhaenge-an-aufgaben.md) | 2026-09-18 |
 | PROJ-8 | Zeiterfassung | P2 | PROJ-4 | Deployed | [PROJ-8](PROJ-8-zeiterfassung.md) | 2026-09-18 |
 | PROJ-9 | Reporting/Analytics-Dashboard | P2 | PROJ-3, PROJ-4, PROJ-8 | Deployed | [PROJ-9](PROJ-9-reporting-analytics-dashboard.md) | 2026-09-18 |
-| PROJ-10 | Benachrichtigungen | P2 | PROJ-4, PROJ-6 | Planned | [PROJ-10](PROJ-10-benachrichtigungen.md) | 2026-09-18 |
+| PROJ-10 | Benachrichtigungen | P2 | PROJ-4, PROJ-6 | Architected | [PROJ-10](PROJ-10-benachrichtigungen.md) | 2026-09-18 |
 | PROJ-11 | Team-Mitglieder einladen/verwalten | P0 | PROJ-1, PROJ-2, PROJ-4 | Deployed | [PROJ-11](PROJ-11-team-mitglieder-verwalten.md) | 2026-09-20 |
 
 <!-- Add features above this line -->

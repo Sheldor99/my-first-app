@@ -75,12 +75,41 @@ _Keine offenen Fragen — Umfang und Trigger-Auswahl konsistent mit den in INDEX
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Automatische Erzeugung von Benachrichtigungen durch die Datenbank (Trigger) statt durch App-Code | Garantiert, dass jede tatsächliche Zuweisungs-/Kommentar-Änderung zuverlässig eine Benachrichtigung auslöst, unabhängig vom Code-Pfad; folgt dem bereits etablierten Muster automatischer DB-Regeln im Projekt | 2026-09-23 |
+| Neue eigenständige Tabelle für Benachrichtigungen | Klare Trennung von Aufgaben/Kommentaren, folgt dem „eine Tabelle pro Entität"-Muster aus PROJ-6/7/8 | 2026-09-23 |
+| Zugriffsregel: nur der Empfänger sieht seine eigenen Benachrichtigungen (kein Team-weiter Zugriff) | Benachrichtigungen sind persönlich, anders als die sonst team-weite Sichtbarkeit bei Aufgaben/Kommentaren/Anhängen | 2026-09-23 |
+| Ungelesene Anzahl per Zählabfrage statt Laden aller Zeilen | Performance-Anforderung aus der Spec direkt umgesetzt | 2026-09-23 |
+| Dropdown/Sheet ab der Glocke statt eigener Seite | Schneller Zugriff von überall in der App, kein unnötiger Seitenwechsel | 2026-09-23 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Component Structure
+```
+App-Header (bestehend, auf der Startseite)
+└── Benachrichtigungs-Glocke mit Anzahl ungelesen (neu) — öffnet die Benachrichtigungs-Ansicht
+
+Benachrichtigungs-Ansicht (neu, Dropdown/Sheet ab der Glocke, kein eigener Seitenwechsel)
+├── „Alle als gelesen markieren"-Button
+├── Liste der Benachrichtigungen (Beschreibung, Zeitpunkt, Link zur betroffenen Aufgabe), neueste zuerst
+│   └── Klick auf eine Benachrichtigung → als gelesen markieren + Sprung zur Aufgabe
+└── Leer-Zustand ("Keine Benachrichtigungen")
+```
+
+### Data Model (plain language)
+Eine neue Tabelle beschreibt jede Benachrichtigung: für wen sie bestimmt ist, welche Aufgabe betroffen ist, welche Art von Ereignis sie ausgelöst hat (Zuweisung oder Kommentar), wer das Ereignis ausgelöst hat, ob sie bereits gelesen wurde, und ein Zeitstempel. Die Einträge werden nicht von der App selbst beim Speichern erzeugt, sondern automatisch von der Datenbank, sobald eine Zuweisung geändert oder ein Kommentar hinzugefügt wird — so kann keine Codeänderung versehentlich vergessen, eine Benachrichtigung auszulösen.
+
+### Tech Decisions
+- **Automatische Erzeugung durch die Datenbank** (nicht durch die App-Oberfläche) bei Zuweisung/Kommentar — stellt sicher, dass jede tatsächliche Änderung zuverlässig eine Benachrichtigung auslöst, unabhängig davon, über welchen Weg im Code die Änderung passiert. Folgt demselben Muster wie bereits bestehende automatische Datenbank-Regeln im Projekt (z. B. die automatische Owner-Zuweisung bei Team-Erstellung).
+- **Neue, eigenständige Tabelle** für Benachrichtigungen, getrennt von Aufgaben/Kommentaren.
+- **Strengere Zugriffsregel als sonst im Projekt üblich:** Ein Nutzer sieht ausschließlich seine eigenen Benachrichtigungen — anders als bei Aufgaben/Kommentaren/Anhängen, wo alle Team-Mitglieder alles sehen, ist eine Benachrichtigung rein persönlich.
+- **Ungelesene Anzahl über eine schnelle Zählabfrage**, nicht durch Laden aller Benachrichtigungs-Zeilen ins Frontend.
+- **Dropdown/Sheet statt eigener Seite** — die Glocke ist von überall in der App erreichbar, ein Seitenwechsel würde den schnellen Zugriff unnötig verlangsamen.
+
+### Dependencies
+Keine neuen npm-Pakete — Verwendung bereits vorhandener shadcn/ui-Komponenten (Popover oder Sheet, kombiniert mit der bereits mehrfach genutzten ScrollArea für die scrollbare Liste).
 
 ## QA Test Results
 _To be added by /qa_
